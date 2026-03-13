@@ -1,0 +1,7 @@
+[tools]
+python = "3.11"
+node = "22"
+
+[env]
+UV_LINK_MODE = "copy"
+PIP_DISABLE_PIP_VERSION_CHECK = "1"
