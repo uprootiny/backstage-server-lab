@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime, timezone
+import json
 from pathlib import Path
 
 import typer
@@ -9,8 +10,10 @@ from rich.console import Console
 from rich.table import Table
 
 from .bench import export_thesis_graph, run_bench
+from .datasets.kaggle_catalogue import build_catalogue
 from .datasets.kaggle import sync_kaggle
 from .runner import run_experiment_file
+from .rna_ingest import ingest_result
 from .store import connect, insert_hypothesis
 from .validation import validate_results
 from .voi import value_of_information
@@ -19,6 +22,7 @@ app = typer.Typer(no_args_is_help=True, help="Validation bench + experiment orch
 console = Console()
 
 DB_DEFAULT = Path("artifacts/validation_bench.db")
+RNA_INDEX_DEFAULT = Path("artifacts/rna_predictions/index.json")
 
 
 def now_iso() -> str:
@@ -77,6 +81,12 @@ def kaggle_sync(search: str = "", limit: int = 50, out: Path = Path("artifacts/k
     console.print(f"[green]kaggle sync written[/green] {path}")
 
 
+@app.command("kaggle-catalogue")
+def kaggle_catalogue(search: str = "rna", limit: int = 80, out: Path = Path("artifacts/kaggle_catalogue.json")) -> None:
+    path = build_catalogue(out=out, search=search, limit=limit)
+    console.print(f"[green]kaggle catalogue written[/green] {path}")
+
+
 @app.command("kaggle-init")
 def kaggle_init(ref: str, out: Path = Path("experiments")) -> None:
     out.mkdir(parents=True, exist_ok=True)
@@ -103,6 +113,49 @@ def kaggle_init(ref: str, out: Path = Path("experiments")) -> None:
         + "\n"
     )
     console.print(f"[green]experiment initialized[/green] {p}")
+
+
+@app.command("ingest-result")
+def ingest_result_cmd(
+    input_path: Path,
+    run_id: str = "",
+    sequence: str = "",
+    model: str = "unknown",
+    out_root: Path = Path("artifacts/rna_predictions"),
+    public_base: str = "http://127.0.0.1:19999",
+) -> None:
+    rid = run_id or f"run-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}"
+    out_pdb = out_root / rid / "prediction.pdb"
+    out = ingest_result(input_path=input_path, out_pdb=out_pdb, default_seq=sequence)
+
+    out_root.mkdir(parents=True, exist_ok=True)
+    idx_path = out_root / "index.json"
+    if idx_path.exists():
+        idx = json.loads(idx_path.read_text())
+    else:
+        idx = {"predictions": []}
+    preds = idx.get("predictions", [])
+    if not isinstance(preds, list):
+        preds = []
+    preds.append(
+        {
+            "run_id": rid,
+            "sequence": sequence or "unknown",
+            "model": model,
+            "pdb_url": f"{public_base.rstrip('/')}/{rid}/prediction.pdb",
+            "created_at": now_iso(),
+            "source": str(input_path),
+        }
+    )
+    idx["predictions"] = preds
+    idx_path.write_text(json.dumps(idx, indent=2))
+    console.print(
+        {
+            "ingested": str(out),
+            "index": str(idx_path),
+            "pdb_url": f"{public_base.rstrip('/')}/{rid}/prediction.pdb",
+        }
+    )
 
 
 @app.command("formulate")

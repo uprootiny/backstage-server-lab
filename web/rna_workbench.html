@@ -1,0 +1,484 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>RNA 3D Workbench</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500&family=IBM+Plex+Sans:wght@300;400;500&display=swap');
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:#0e0e0b; --bg1:#141410; --bg2:#1a1a15; --bg3:#222218;
+      --amber:#c8860a; --amber-l:#e8a020; --amber-d:#8a5c05;
+      --green:#3a7a3a; --red:#8a3020; --text:#c8c8a8; --text-b:#e8e8c8;
+      --muted:#5a5a48; --border:#2a2a1e; --border-b:#3a3a28; --mono:'IBM Plex Mono', monospace;
+    }
+    body { background: var(--bg); color: var(--text); font-family: var(--mono); font-size: 12px; }
+    .wb { display:grid; grid-template-rows:44px 1fr 78px; grid-template-columns:220px 1fr 260px; height:100vh; gap:1px; background:var(--border); }
+    .top { grid-column:1/-1; background:var(--bg1); display:flex; align-items:center; gap:7px; padding:0 10px; border-bottom:1px solid var(--border-b); }
+    .title { color:var(--amber-l); font-size:11px; letter-spacing:.12em; text-transform:uppercase; }
+    .inp { background:var(--bg3); border:1px solid var(--border-b); color:var(--text-b); font-family:var(--mono); font-size:11px; padding:4px 6px; border-radius:2px; }
+    .inp:focus { outline:none; border-color:var(--amber-d); }
+    .btn { background:var(--amber-d); border:none; color:var(--bg); font-family:var(--mono); font-size:10px; text-transform:uppercase; letter-spacing:.05em; padding:4px 8px; border-radius:2px; cursor:pointer; }
+    .btn:hover { background:var(--amber); }
+    .status { margin-left:auto; font-size:10px; border-radius:2px; padding:2px 7px; }
+    .status.ok { background:var(--green); color:#9fdf9f; }
+    .status.loading { background:var(--amber-d); color:#f0c060; }
+    .status.err { background:var(--red); color:#f09080; }
+    .left,.right { background:var(--bg1); overflow-y:auto; padding:8px 0; }
+    .head { font-size:9px; color:var(--muted); text-transform:uppercase; letter-spacing:.1em; padding:0 10px 6px; margin-top:8px; }
+    .head:first-child { margin-top:0; }
+    .target { display:block; width:100%; border:none; background:none; text-align:left; color:var(--text); font-family:var(--mono); font-size:10px; padding:4px 10px; cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .target:hover,.target.active { background:var(--bg3); color:var(--amber-l); }
+    .tid { color:var(--amber-d); margin-right:4px; font-size:9px; }
+    .viewer { position:relative; background:#000; }
+    #mol { width:100%; height:100%; }
+    .ov { position:absolute; top:6px; left:6px; color:var(--muted); font-size:9px; line-height:1.65; pointer-events:none; }
+    .ov span { color:var(--amber-d); }
+    .group { padding:0 10px 9px; }
+    .row { display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--border); padding:4px 0; }
+    .metric { font-size:10px; color:var(--text-b); }
+    .seqbar { grid-column:1/-1; background:var(--bg2); display:flex; align-items:center; gap:6px; overflow-x:auto; padding:8px 10px; border-top:1px solid var(--border-b); }
+    .seq-label { font-size:9px; color:var(--muted); text-transform:uppercase; letter-spacing:.08em; margin-right:8px; white-space:nowrap; }
+    .seq { display:flex; gap:1px; }
+    .nt { font-size:9px; padding:2px 3px; border:1px solid transparent; border-radius:1px; cursor:pointer; }
+    .nt:hover { border-color:var(--amber); }
+    .nt.sel { border-color:var(--amber-l); background:var(--amber-d); color:#0e0e0b; }
+    .nt.A { color:#e8804a; } .nt.U { color:#7ab8e8; } .nt.G { color:#8adc8a; } .nt.C { color:#e8c050; }
+  </style>
+</head>
+<body>
+  <div class="wb">
+    <div class="top">
+      <span class="title">RNA 3D Workbench</span>
+      <span style="font-size:10px;color:var(--muted)">PDB</span>
+      <input class="inp" id="pdb-id" value="4TNA" style="width:80px;text-transform:uppercase" />
+      <button class="btn" id="load-pdb">load</button>
+      <span style="font-size:10px;color:var(--muted)">URL</span>
+      <input class="inp" id="url" placeholder="https://...pdb" style="width:200px" />
+      <button class="btn" id="load-url">fetch</button>
+      <span style="font-size:10px;color:var(--muted)">Bridge</span>
+      <input class="inp" id="bridge" value="http://127.0.0.1:19999" style="width:150px" />
+      <button class="btn" id="load-latest">latest</button>
+      <span class="status loading" id="status">idle</span>
+    </div>
+
+    <div class="left">
+      <div class="head">Quick Targets</div>
+      <button class="target active" data-pdb="4TNA"><span class="tid">4TNA</span>tRNA-Phe</button>
+      <button class="target" data-pdb="2GIS"><span class="tid">2GIS</span>SAM riboswitch</button>
+      <button class="target" data-pdb="4LX5"><span class="tid">4LX5</span>SAM-I riboswitch</button>
+      <button class="target" data-pdb="1YFG"><span class="tid">1YFG</span>tRNA-Asp</button>
+      <button class="target" data-pdb="2R8S"><span class="tid">2R8S</span>HCV IRES</button>
+      <button class="target" data-pdb="3SKI"><span class="tid">3SKI</span>Gly riboswitch</button>
+      <button class="target" data-pdb="4QJH"><span class="tid">4QJH</span>Adenine riboswitch</button>
+      <button class="target" data-pdb="5KK5"><span class="tid">5KK5</span>Pistol ribozyme</button>
+      <button class="target" data-pdb="6TF3"><span class="tid">6TF3</span>Twister</button>
+      <button class="target" data-pdb="1FJG"><span class="tid">1FJG</span>23S rRNA</button>
+      <button class="target" data-pdb="1JJ2"><span class="tid">1JJ2</span>50S LSU</button>
+      <button class="target" data-pdb="6UES"><span class="tid">6UES</span>SARS SL1</button>
+      <button class="target" data-pdb="7K00"><span class="tid">7K00</span>SARS FS</button>
+      <button class="target" data-pdb="1EHZ"><span class="tid">1EHZ</span>tRNA canonical</button>
+      <div class="head">Compare</div>
+      <div class="group">
+        <input class="inp" id="ref-url" placeholder="reference PDB URL" style="width:100%;margin-bottom:4px" />
+        <input class="inp" id="pred-url" placeholder="prediction PDB URL" style="width:100%;margin-bottom:4px" />
+        <button class="btn" id="compare-btn" style="width:100%">superpose + heatmap</button>
+      </div>
+    </div>
+
+    <div class="viewer">
+      <div id="mol"></div>
+      <div class="ov">
+        <div>Structure: <span id="info-id">-</span></div>
+        <div>Residues: <span id="info-res">-</span></div>
+        <div>Atoms: <span id="info-atm">-</span></div>
+        <div>Compare: <span id="info-compare">off</span></div>
+      </div>
+    </div>
+
+    <div class="right">
+      <div class="head">Overlays</div>
+      <div class="group">
+        <div class="row"><span>backbone</span><input type="checkbox" id="tog-backbone" checked /></div>
+        <div class="row"><span>cartoon</span><input type="checkbox" id="tog-cartoon" checked /></div>
+        <div class="row"><span>sticks</span><input type="checkbox" id="tog-sticks" /></div>
+        <div class="row"><span>surface</span><input type="checkbox" id="tog-surface" /></div>
+        <div class="row"><span>C1' points</span><input type="checkbox" id="tog-c1p" /></div>
+        <div class="row"><span>res labels</span><input type="checkbox" id="tog-labels" /></div>
+      </div>
+      <div class="head">Color</div>
+      <div class="group">
+        <select id="scheme" class="inp" style="width:100%">
+          <option value="nucleic">nucleic (AUCG)</option>
+          <option value="spectrum">spectrum</option>
+          <option value="chainbow">chainbow</option>
+          <option value="b">B-factor / pLDDT</option>
+          <option value="white">flat white</option>
+          <option value="amber">amber mono</option>
+        </select>
+      </div>
+      <div class="head">Metrics</div>
+      <div class="group">
+        <div class="row"><span>matched residues</span><span class="metric" id="m-matched">-</span></div>
+        <div class="row"><span>RMSD (A)</span><span class="metric" id="m-rmsd">-</span></div>
+        <div class="row"><span>P50 err (A)</span><span class="metric" id="m-p50">-</span></div>
+        <div class="row"><span>P90 err (A)</span><span class="metric" id="m-p90">-</span></div>
+      </div>
+      <div class="head">Residue highlight</div>
+      <div class="group">
+        <input class="inp" id="resi-input" placeholder="1-8,65-72" style="width:100%;margin-bottom:4px" />
+        <button class="btn" id="resi-apply" style="width:100%;margin-bottom:4px">highlight</button>
+        <button class="btn" id="resi-clear" style="width:100%;background:#3a3a2a;color:#c8c8a8">clear</button>
+      </div>
+    </div>
+
+    <div class="seqbar">
+      <span class="seq-label">sequence</span>
+      <div class="seq" id="seq"><span style="font-size:9px;color:#5a5a48">load structure</span></div>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/3Dmol/2.4.2/3Dmol-min.js"></script>
+  <script>
+    const state = {
+      viewer: null,
+      model: null,
+      surfaceObj: null,
+      selectedResi: new Set(),
+      compareMode: false,
+      overlays: { backbone: true, cartoon: true, sticks: false, surface: false, c1p: false, labels: false },
+      perResErr: {},
+    };
+
+    function setStatus(msg, kind) {
+      const s = document.getElementById('status');
+      s.textContent = msg;
+      s.className = 'status ' + (kind || 'loading');
+    }
+
+    function init() {
+      state.viewer = $3Dmol.createViewer(document.getElementById('mol'), { backgroundColor: '0x0a0a08', antialias: true });
+      bindEvents();
+      loadPdbId();
+    }
+
+    function colorFuncFromScheme() {
+      const scheme = document.getElementById('scheme').value;
+      if (scheme === 'nucleic') return (a) => ({ A:'#e87830', U:'#4090c8', G:'#40b050', C:'#d0a030' }[a.resn] || '#808080');
+      if (scheme === 'amber') return () => '#c8860a';
+      if (scheme === 'white') return () => '#c0c0a0';
+      return null;
+    }
+
+    function errColor(e) {
+      if (e == null) return '#808080';
+      const t = Math.max(0, Math.min(1, e / 8.0));
+      const r = Math.floor(80 + 175 * t);
+      const g = Math.floor(170 - 120 * t);
+      const b = Math.floor(220 - 200 * t);
+      return `rgb(${r},${g},${b})`;
+    }
+
+    function redraw() {
+      if (!state.viewer || !state.model) return;
+      state.viewer.setStyle({}, {});
+      const cfunc = colorFuncFromScheme();
+      const scheme = document.getElementById('scheme').value;
+
+      if (state.overlays.backbone) {
+        state.viewer.setStyle({}, { line: { color: '#353525', linewidth: 0.5 } });
+      }
+      if (state.overlays.cartoon) {
+        if (state.compareMode && Object.keys(state.perResErr).length > 0) {
+          state.viewer.setStyle({}, { cartoon: { colorfunc: (a) => errColor(state.perResErr[String(a.resi)]), thickness: 0.38 } });
+        } else if (cfunc) {
+          state.viewer.setStyle({}, { cartoon: { colorfunc: cfunc, thickness: 0.38 } });
+        } else {
+          state.viewer.setStyle({}, { cartoon: { colorscheme: scheme, thickness: 0.38 } });
+        }
+      }
+      if (state.overlays.sticks) {
+        if (cfunc) state.viewer.setStyle({}, { stick: { colorfunc: cfunc, radius: 0.14 } });
+        else state.viewer.setStyle({}, { stick: { colorscheme: scheme, radius: 0.14 } });
+      }
+      if (state.overlays.c1p) {
+        state.viewer.setStyle({ atom: "C1'" }, { sphere: { color: '#c05820', radius: 0.48 } });
+      }
+      if (state.overlays.surface) {
+        if (state.surfaceObj) state.viewer.removeSurface(state.surfaceObj);
+        state.surfaceObj = state.viewer.addSurface($3Dmol.SurfaceType.VDW, { opacity: 0.35, color: '#3f5360' }, {});
+      } else if (state.surfaceObj) {
+        state.viewer.removeSurface(state.surfaceObj);
+        state.surfaceObj = null;
+      }
+      if (state.overlays.labels) {
+        state.viewer.removeAllLabels();
+        state.model.atoms().forEach((a) => {
+          if (a.atom === "C1'") {
+            state.viewer.addLabel(a.resn + a.resi, { position: { x:a.x, y:a.y, z:a.z }, fontsize: 8, fontColor: '#e8c880', showBackground:false });
+          }
+        });
+      } else {
+        state.viewer.removeAllLabels();
+      }
+
+      if (state.selectedResi.size > 0) {
+        const arr = [...state.selectedResi];
+        state.viewer.setStyle({ resi: arr }, { stick: { color: '#e8a020', radius: 0.24 } });
+        state.viewer.setStyle({ resi: arr, atom: "C1'" }, { sphere: { color: '#e8a020', radius: 0.68 } });
+      }
+      state.viewer.render();
+    }
+
+    function parseNt(resn) {
+      const r = (resn || '').trim();
+      if (r.length === 1) return r;
+      if (r === 'ADE') return 'A';
+      if (r === 'URA') return 'U';
+      if (r === 'GUA') return 'G';
+      if (r === 'CYT') return 'C';
+      return (r[0] || '?').toUpperCase();
+    }
+
+    function buildSeq(atoms) {
+      const seen = new Set();
+      const residues = [];
+      atoms.forEach((a) => {
+        const k = `${a.chain}_${a.resi}`;
+        if (!seen.has(k)) { seen.add(k); residues.push({ resi:a.resi, resn:a.resn, chain:a.chain }); }
+      });
+      residues.sort((a,b) => a.resi - b.resi);
+      document.getElementById('info-res').textContent = String(residues.length);
+      const seq = document.getElementById('seq');
+      seq.innerHTML = '';
+      residues.forEach((r) => {
+        const nt = parseNt(r.resn);
+        const el = document.createElement('span');
+        el.className = `nt ${nt}`;
+        el.textContent = nt;
+        const err = state.perResErr[String(r.resi)];
+        if (err != null) {
+          el.style.background = errColor(err);
+          el.style.color = '#12120e';
+          el.title = `${r.resn} ${r.resi} (${r.chain}) err=${err.toFixed(2)}A`;
+        } else {
+          el.title = `${r.resn} ${r.resi} (${r.chain})`;
+        }
+        el.addEventListener('click', () => {
+          if (state.selectedResi.has(r.resi)) {
+            state.selectedResi.delete(r.resi); el.classList.remove('sel');
+          } else {
+            state.selectedResi.add(r.resi); el.classList.add('sel');
+          }
+          state.viewer.zoomTo({ resi:[...state.selectedResi] });
+          redraw();
+        });
+        seq.appendChild(el);
+      });
+    }
+
+    function loadModel(pdbText, label) {
+      state.viewer.clear();
+      state.model = state.viewer.addModel(pdbText, 'pdb');
+      state.compareMode = false;
+      state.perResErr = {};
+      state.selectedResi = new Set();
+      document.getElementById('info-id').textContent = label;
+      document.getElementById('info-atm').textContent = String(state.model.atoms().length);
+      document.getElementById('info-compare').textContent = 'off';
+      buildSeq(state.model.atoms());
+      redraw();
+      state.viewer.zoomTo();
+      state.viewer.render();
+      setStatus('loaded', 'ok');
+      document.getElementById('m-matched').textContent = '-';
+      document.getElementById('m-rmsd').textContent = '-';
+      document.getElementById('m-p50').textContent = '-';
+      document.getElementById('m-p90').textContent = '-';
+    }
+
+    async function loadPdbId() {
+      const id = document.getElementById('pdb-id').value.trim().toUpperCase();
+      if (!id) return;
+      setStatus('fetching...', 'loading');
+      try {
+        const r = await fetch(`https://files.rcsb.org/download/${id}.pdb`);
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        const txt = await r.text();
+        loadModel(txt, id);
+      } catch (e) {
+        setStatus(`error: ${e.message}`, 'err');
+      }
+    }
+
+    async function loadByUrl() {
+      const url = document.getElementById('url').value.trim();
+      if (!url) return;
+      setStatus('fetching...', 'loading');
+      try {
+        const r = await fetch(url);
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        const txt = await r.text();
+        const label = url.split('/').pop().split('.')[0] || 'external';
+        loadModel(txt, label);
+      } catch (e) {
+        setStatus(`error: ${e.message}`, 'err');
+      }
+    }
+
+    async function loadLatestBridge() {
+      const base = document.getElementById('bridge').value.trim().replace(/\/+$/, '');
+      if (!base) return;
+      setStatus('bridge...', 'loading');
+      try {
+        const idxRes = await fetch(`${base}/index.json`);
+        if (!idxRes.ok) throw new Error(`index HTTP ${idxRes.status}`);
+        const idx = await idxRes.json();
+        const list = Array.isArray(idx.predictions) ? idx.predictions : [];
+        if (list.length === 0) throw new Error('no predictions in index');
+        const latest = list[list.length - 1];
+        document.getElementById('url').value = latest.pdb_url || '';
+        await loadByUrl();
+      } catch (e) {
+        setStatus(`error: ${e.message}`, 'err');
+      }
+    }
+
+    function parseC1(text) {
+      const map = {};
+      const lines = text.split(/\r?\n/);
+      for (const line of lines) {
+        if (!line.startsWith('ATOM')) continue;
+        const atom = line.slice(12, 16).trim();
+        if (atom !== "C1'") continue;
+        const resi = parseInt(line.slice(22, 26).trim(), 10);
+        const x = parseFloat(line.slice(30, 38).trim());
+        const y = parseFloat(line.slice(38, 46).trim());
+        const z = parseFloat(line.slice(46, 54).trim());
+        if (!Number.isFinite(resi) || !Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) continue;
+        map[String(resi)] = [x, y, z];
+      }
+      return map;
+    }
+
+    function median(a) {
+      if (a.length === 0) return 0;
+      const b = [...a].sort((x,y) => x - y);
+      const m = Math.floor(b.length / 2);
+      return b.length % 2 ? b[m] : 0.5 * (b[m - 1] + b[m]);
+    }
+
+    async function compareSuperpose() {
+      const refUrl = document.getElementById('ref-url').value.trim();
+      const predUrl = document.getElementById('pred-url').value.trim();
+      if (!refUrl || !predUrl) { setStatus('ref/pred URL required', 'err'); return; }
+      setStatus('comparing...', 'loading');
+      try {
+        const [rRef, rPred] = await Promise.all([fetch(refUrl), fetch(predUrl)]);
+        if (!rRef.ok) throw new Error(`ref HTTP ${rRef.status}`);
+        if (!rPred.ok) throw new Error(`pred HTTP ${rPred.status}`);
+        const [tRef, tPred] = await Promise.all([rRef.text(), rPred.text()]);
+
+        const ref = parseC1(tRef);
+        const pred = parseC1(tPred);
+        const common = Object.keys(ref).filter((k) => pred[k]);
+        if (common.length < 5) throw new Error('not enough overlapping C1\' residues');
+
+        // Approximate alignment by centroid translation (fast + robust fallback)
+        const cref = [0,0,0], cpred = [0,0,0];
+        common.forEach((k) => {
+          cref[0] += ref[k][0]; cref[1] += ref[k][1]; cref[2] += ref[k][2];
+          cpred[0] += pred[k][0]; cpred[1] += pred[k][1]; cpred[2] += pred[k][2];
+        });
+        cref[0] /= common.length; cref[1] /= common.length; cref[2] /= common.length;
+        cpred[0] /= common.length; cpred[1] /= common.length; cpred[2] /= common.length;
+        const shift = [cref[0] - cpred[0], cref[1] - cpred[1], cref[2] - cpred[2]];
+
+        const perResErr = {};
+        const errs = [];
+        common.forEach((k) => {
+          const dx = (pred[k][0] + shift[0]) - ref[k][0];
+          const dy = (pred[k][1] + shift[1]) - ref[k][1];
+          const dz = (pred[k][2] + shift[2]) - ref[k][2];
+          const d = Math.sqrt(dx*dx + dy*dy + dz*dz);
+          perResErr[k] = d;
+          errs.push(d);
+        });
+        const rmsd = Math.sqrt(errs.reduce((s, x) => s + x*x, 0) / errs.length);
+        const p50 = median(errs);
+        const p90 = [...errs].sort((a,b) => a-b)[Math.floor(0.9 * (errs.length - 1))];
+
+        // Render pred but color by error map (overlaying ref is possible later; keep view legible now)
+        state.viewer.clear();
+        state.model = state.viewer.addModel(tPred, 'pdb');
+        state.compareMode = true;
+        state.perResErr = perResErr;
+        state.selectedResi = new Set();
+        document.getElementById('info-id').textContent = 'prediction vs reference';
+        document.getElementById('info-atm').textContent = String(state.model.atoms().length);
+        document.getElementById('info-compare').textContent = 'on';
+        buildSeq(state.model.atoms());
+        redraw();
+        state.viewer.zoomTo();
+        state.viewer.render();
+
+        document.getElementById('m-matched').textContent = String(common.length);
+        document.getElementById('m-rmsd').textContent = rmsd.toFixed(3);
+        document.getElementById('m-p50').textContent = p50.toFixed(3);
+        document.getElementById('m-p90').textContent = p90.toFixed(3);
+        setStatus('compare ready', 'ok');
+      } catch (e) {
+        setStatus(`error: ${e.message}`, 'err');
+      }
+    }
+
+    function highlightFromInput() {
+      const raw = document.getElementById('resi-input').value.trim();
+      state.selectedResi = new Set();
+      if (raw) {
+        raw.split(',').forEach((part) => {
+          const m = part.trim().match(/^(\d+)(?:-(\d+))?$/);
+          if (!m) return;
+          const a = parseInt(m[1], 10);
+          const b = m[2] ? parseInt(m[2], 10) : a;
+          for (let i = a; i <= b; i++) state.selectedResi.add(i);
+        });
+      }
+      document.querySelectorAll('.nt').forEach((el) => {
+        const m = el.title.match(/\s(\d+)\s/);
+        const r = m ? parseInt(m[1], 10) : -1;
+        el.classList.toggle('sel', state.selectedResi.has(r));
+      });
+      redraw();
+      if (state.selectedResi.size > 0) state.viewer.zoomTo({ resi:[...state.selectedResi] });
+    }
+
+    function bindEvents() {
+      document.getElementById('load-pdb').addEventListener('click', loadPdbId);
+      document.getElementById('load-url').addEventListener('click', loadByUrl);
+      document.getElementById('load-latest').addEventListener('click', loadLatestBridge);
+      document.getElementById('compare-btn').addEventListener('click', compareSuperpose);
+      document.getElementById('resi-apply').addEventListener('click', highlightFromInput);
+      document.getElementById('resi-clear').addEventListener('click', () => {
+        document.getElementById('resi-input').value = '';
+        highlightFromInput();
+      });
+      document.getElementById('scheme').addEventListener('change', redraw);
+      ['backbone','cartoon','sticks','surface','c1p','labels'].forEach((k) => {
+        document.getElementById(`tog-${k}`).addEventListener('change', (e) => { state.overlays[k] = !!e.target.checked; redraw(); });
+      });
+      document.querySelectorAll('.target').forEach((el) => {
+        el.addEventListener('click', () => {
+          document.querySelectorAll('.target').forEach((x) => x.classList.remove('active'));
+          el.classList.add('active');
+          document.getElementById('pdb-id').value = el.dataset.pdb || '4TNA';
+          loadPdbId();
+        });
+      });
+    }
+
+    window.addEventListener('load', init);
+  </script>
+</body>
+</html>

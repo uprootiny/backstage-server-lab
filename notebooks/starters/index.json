@@ -1,0 +1,25 @@
+{
+  "starters": [
+    {
+      "id": "rna_eda_baseline",
+      "title": "RNA EDA Baseline",
+      "path": "notebooks/starters/01_rna_eda_baseline.ipynb",
+      "focus": "Data profile and sequence diagnostics",
+      "description": "Load challenge data, inspect sequence-length and motif distributions, and define split sanity checks."
+    },
+    {
+      "id": "rna_3d_training_stub",
+      "title": "RNA 3D Training Stub",
+      "path": "notebooks/starters/02_rna_3d_training_stub.ipynb",
+      "focus": "Minimal train/eval loop with variants",
+      "description": "Three-variant experiment harness for fast baseline comparison and logging."
+    },
+    {
+      "id": "rna_eval_bridge",
+      "title": "RNA Eval and Workbench Bridge",
+      "path": "notebooks/starters/03_rna_eval_workbench_bridge.ipynb",
+      "focus": "Export and register PDB predictions",
+      "description": "Write PDB outputs and register them to artifacts/rna_predictions for workbench fetch."
+    }
+  ]
+}

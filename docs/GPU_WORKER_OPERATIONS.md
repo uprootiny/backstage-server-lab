@@ -27,6 +27,7 @@ Expected listeners:
 - `:6006` TensorBoard
 - `:8511` Kaggle mashup UI (if launched)
 - `:19999` RNA artifact bridge
+- `:8522` RNA workbench
 
 ## 3. Run validation bench
 
@@ -49,6 +50,7 @@ Requires `~/.kaggle/kaggle.json` or `KAGGLE_USERNAME` + `KAGGLE_KEY`.
 
 ```bash
 cd /workspace/backstage-server-lab
+make kaggle-catalogue
 bash scripts/run_kaggle_mashup.sh
 ```
 
@@ -65,6 +67,17 @@ Then consume:
 
 - `http://<gpu-host>:19999/index.json`
 - `http://<gpu-host>:19999/exp42/prediction.pdb`
+
+## 5c. Launch RNA workbench
+
+```bash
+cd /workspace/backstage-server-lab
+make rna-workbench
+```
+
+Open:
+
+- `http://<gpu-host>:8522/rna_workbench.html`
 
 ## 6. Stop services cleanly
 

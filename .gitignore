@@ -16,6 +16,8 @@ artifacts/*
 !artifacts/.gitkeep
 data/*
 !data/.gitkeep
+!data/seeds/
+!data/seeds/*.json
 tmp/*
 !tmp/.gitkeep
 results/*

@@ -78,6 +78,32 @@ Open:
 
 Requires Kaggle auth (`~/.kaggle/kaggle.json` or `KAGGLE_USERNAME` + `KAGGLE_KEY`).
 
+Build structured RNA-focused catalogue (competitions/models/notebooks/datasets):
+
+```bash
+make kaggle-catalogue
+```
+
+Output:
+
+- `artifacts/kaggle_catalogue.json`
+
+The mashup app can refresh/read this catalogue in the `Structured Catalogue` tab.
+If Kaggle auth is missing, the viewer is prepopulated from repo seeds in `data/seeds/`.
+
+## Starter notebook library
+
+Curated local starters are versioned in:
+
+- `notebooks/starters/`
+- `notebooks/starters/index.json`
+
+Includes:
+
+- RNA EDA baseline
+- RNA 3D training stub
+- RNA eval + workbench artifact bridge
+
 ## RNA prediction bridge (workbench input path)
 
 Serve prediction artifacts for external workbenches/3D viewers:
@@ -94,6 +120,29 @@ Bridge index:
 Prediction URL shape:
 
 - `http://<host>:19999/<run_id>/prediction.pdb`
+
+Universal ingestion from notebook outputs:
+
+```bash
+make rna-ingest INPUT=/path/result.(pdb|csv|json|npy|npz) RUN_ID=exp42 SEQUENCE=AUGCUA MODEL=my-model
+```
+
+This normalizes diverse outputs into:
+
+- `artifacts/rna_predictions/<run_id>/prediction.pdb`
+- `artifacts/rna_predictions/index.json`
+
+## RNA 3D Workbench
+
+Serve the interactive viewer (quick-load targets, URL fetch, bridge fetch, overlay controls, residue strip, compare panel):
+
+```bash
+make rna-workbench
+```
+
+Open:
+
+- `http://<host>:8522/rna_workbench.html`
 
 ## Layout
 

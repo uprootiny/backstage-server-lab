@@ -1,0 +1,96 @@
+{
+  "generated_at": "2026-03-14T00:00:00Z",
+  "search": "rna",
+  "limit": 120,
+  "summary": {"competitions": 3, "datasets": 1, "models": 2, "notebooks": 2},
+  "items": [
+    {
+      "kind": "competition",
+      "ref": "stanford-rna-3d-folding-part-2",
+      "title": "Stanford RNA 3D Folding Part 2",
+      "domain": "rna_3d_folding",
+      "data_shape": "sequence -> 3D coordinates",
+      "representation": "RNA sequence and atom coordinates",
+      "target": "predict nucleotide 3D structure",
+      "validation_dropout": "temporal holdout + motif holdout",
+      "url": "https://www.kaggle.com/competitions/stanford-rna-3d-folding-part-2"
+    },
+    {
+      "kind": "competition",
+      "ref": "stanford-rna-3d-folding",
+      "title": "Stanford RNA 3D Folding",
+      "domain": "rna_3d_folding",
+      "data_shape": "sequence -> 3D coordinates",
+      "representation": "RNA sequence and atom coordinates",
+      "target": "predict nucleotide 3D structure",
+      "validation_dropout": "family split + hard-sequence holdout",
+      "url": "https://www.kaggle.com/competitions/stanford-rna-3d-folding"
+    },
+    {
+      "kind": "competition",
+      "ref": "stanford-ribonanza-rna-folding",
+      "title": "Stanford Ribonanza RNA Folding",
+      "domain": "rna_folding",
+      "data_shape": "sequence -> structure/reactivity",
+      "representation": "sequence plus structural labels",
+      "target": "predict RNA folding behavior",
+      "validation_dropout": "family split + sequence identity holdout",
+      "url": "https://www.kaggle.com/competitions/stanford-ribonanza-rna-folding"
+    },
+    {
+      "kind": "model",
+      "ref": "ribonanzanet2",
+      "title": "RibonanzaNet2",
+      "domain": "rna",
+      "data_shape": "sequence -> embedding/structure",
+      "representation": "tokenized RNA sequence",
+      "target": "foundation model features for RNA",
+      "validation_dropout": "challenge-specific external holdout",
+      "url": "https://www.kaggle.com/models"
+    },
+    {
+      "kind": "model",
+      "ref": "multimolecule-rna-fm",
+      "title": "MultiMolecule RNA-FM",
+      "domain": "rna",
+      "data_shape": "sequence -> embedding",
+      "representation": "tokenized RNA sequence",
+      "target": "fill-mask and RNA representation",
+      "validation_dropout": "challenge-specific external holdout",
+      "url": "https://www.kaggle.com/models"
+    },
+    {
+      "kind": "notebook",
+      "ref": "iafoss/rna-starter",
+      "title": "RNA starter [0.186 LB]",
+      "domain": "rna_folding",
+      "data_shape": "sequence + labels",
+      "representation": "RNA sequence features",
+      "target": "starter baseline",
+      "validation_dropout": "leaderboard replay + local holdout",
+      "url": "https://www.kaggle.com/code/iafoss/rna-starter"
+    },
+    {
+      "kind": "notebook",
+      "ref": "llkh0a/stanford-rna-3d-folding-part-2-protenix-tbm",
+      "title": "Stanford RNA 3D Folding Part 2 | Protenix+TBM",
+      "domain": "rna_3d_folding",
+      "data_shape": "sequence -> 3D coordinates",
+      "representation": "template + model ensemble",
+      "target": "high-score structural prediction",
+      "validation_dropout": "public/private leaderboard split",
+      "url": "https://www.kaggle.com/code/llkh0a/stanford-rna-3d-folding-part-2-protenix-tbm"
+    },
+    {
+      "kind": "dataset",
+      "ref": "stanford-rna-3d-folding-2",
+      "title": "Stanford RNA 3D Folding Part 2 Dataset",
+      "domain": "rna_3d_folding",
+      "data_shape": "sequence -> 3D coordinates",
+      "representation": "sequence metadata + coordinate targets",
+      "target": "training and validation splits",
+      "validation_dropout": "temporal holdout + hard targets",
+      "url": "https://www.kaggle.com/competitions/stanford-rna-3d-folding-part-2/data"
+    }
+  ]
+}

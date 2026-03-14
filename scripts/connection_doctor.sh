@@ -43,6 +43,7 @@ append_row "MLflow" "http://127.0.0.1:1111" "$(check_http "http://127.0.0.1:1111
 append_row "TensorBoard" "http://127.0.0.1:6006" "$(check_http "http://127.0.0.1:6006")"
 append_row "Kaggle Mashup" "http://127.0.0.1:8511" "$(check_http "http://127.0.0.1:8511")"
 append_row "RNA Artifact Bridge" "http://127.0.0.1:19999" "$(check_http "http://127.0.0.1:19999")"
+append_row "RNA Workbench" "http://127.0.0.1:8522/rna_workbench.html" "$(check_http "http://127.0.0.1:8522/rna_workbench.html")"
 
 {
   echo
@@ -89,7 +90,7 @@ fi
   echo "## Listening Ports Snapshot"
   echo
   echo '```'
-  ss -ltn 2>/dev/null | awk 'NR==1 || /:1111|:6006|:8080|:8511|:19999/'
+  ss -ltn 2>/dev/null | awk 'NR==1 || /:1111|:6006|:8080|:8511|:8522|:19999/'
   echo '```'
 } >> "$OUT_FILE"
 
