@@ -20,6 +20,12 @@ make up
 make sanity
 ```
 
+Single-command clone + bootstrap:
+
+```bash
+bash scripts/vast_clone_bootstrap.sh https://github.com/uprootiny/backstage-server-lab.git /workspace/backstage-server-lab
+```
+
 ## Daily workflow
 
 ```bash
@@ -84,3 +90,4 @@ Requires Kaggle auth (`~/.kaggle/kaggle.json` or `KAGGLE_USERNAME` + `KAGGLE_KEY
 
 - If the Vast instance has no attached volume, treat local state as ephemeral.
 - Use `make sync DEST=user@host:/path/backup` frequently.
+- Operator runbook: `docs/GPU_WORKER_OPERATIONS.md`

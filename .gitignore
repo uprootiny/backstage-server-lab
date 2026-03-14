@@ -18,5 +18,7 @@ data/*
 !data/.gitkeep
 tmp/*
 !tmp/.gitkeep
+results/*
+!results/.gitkeep
 mlflow.db
 .DS_Store

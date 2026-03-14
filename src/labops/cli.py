@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import sqlite3
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -10,9 +9,13 @@ from rich.console import Console
 from rich.table import Table
 
 from .bench import export_thesis_graph, run_bench
+from .datasets.kaggle import sync_kaggle
+from .runner import run_experiment_file
 from .store import connect, insert_hypothesis
+from .validation import validate_results
+from .voi import value_of_information
 
-app = typer.Typer(no_args_is_help=True, help="Validation bench + hypothesis/VOI orchestration")
+app = typer.Typer(no_args_is_help=True, help="Validation bench + experiment orchestration")
 console = Console()
 
 DB_DEFAULT = Path("artifacts/validation_bench.db")
@@ -20,6 +23,86 @@ DB_DEFAULT = Path("artifacts/validation_bench.db")
 
 def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+@app.command("new-exp")
+def new_exp(name: str, out: Path = Path("experiments")) -> None:
+    out.mkdir(parents=True, exist_ok=True)
+    p = out / f"{name}.yaml"
+    if p.exists():
+        raise typer.BadParameter(f"experiment exists: {p}")
+    p.write_text(
+        "\n".join(
+            [
+                f"name: {name}",
+                "hypothesis: |",
+                "  Replace with a crisp testable statement",
+                "dataset: kaggle/<dataset-ref>",
+                "variants:",
+                "  - lr: 0.0001",
+                "    batch_size: 16",
+                "  - lr: 0.0003",
+                "    batch_size: 32",
+                "  - lr: 0.001",
+                "    batch_size: 64",
+                "metrics:",
+                "  - score",
+            ]
+        )
+        + "\n"
+    )
+    console.print(f"[green]created[/green] {p}")
+
+
+@app.command("run")
+def run(experiment: Path, workers: int = 3) -> None:
+    out = run_experiment_file(experiment, workers=workers)
+    table = Table(title=f"Experiment Run: {out['experiment']}")
+    table.add_column("variant_idx")
+    table.add_column("score")
+    for r in out["results"]:
+        table.add_row(str(r["variant_idx"]), f"{r['score']:.4f}")
+    console.print(table)
+
+
+@app.command("suggest-next")
+def suggest_next(uncertainty: float = 0.6, expected_improvement: float = 0.2, importance: float = 0.9) -> None:
+    voi = value_of_information(uncertainty, expected_improvement, importance)
+    console.print({"voi": round(voi, 4), "uncertainty": uncertainty, "expected_improvement": expected_improvement, "importance": importance})
+
+
+@app.command("kaggle-sync")
+def kaggle_sync(search: str = "", limit: int = 50, out: Path = Path("artifacts/kaggle_sync.json")) -> None:
+    path = sync_kaggle(out=out, search=search, limit=limit)
+    console.print(f"[green]kaggle sync written[/green] {path}")
+
+
+@app.command("kaggle-init")
+def kaggle_init(ref: str, out: Path = Path("experiments")) -> None:
+    out.mkdir(parents=True, exist_ok=True)
+    name = ref.replace("/", "-")
+    p = out / f"{name}.yaml"
+    p.write_text(
+        "\n".join(
+            [
+                f"name: {name}",
+                "hypothesis: |",
+                f"  Baseline on kaggle challenge {ref} can be improved by variant search",
+                f"dataset: kaggle/{ref}",
+                "variants:",
+                "  - lr: 0.0001",
+                "    batch_size: 16",
+                "  - lr: 0.0003",
+                "    batch_size: 32",
+                "  - lr: 0.001",
+                "    batch_size: 64",
+                "metrics:",
+                "  - score",
+            ]
+        )
+        + "\n"
+    )
+    console.print(f"[green]experiment initialized[/green] {p}")
 
 
 @app.command("formulate")
@@ -78,6 +161,9 @@ def validate(
     rows = cur.fetchall()
     conn.close()
 
+    recent = [{"variant": str(v), "score": float(m)} for v, m in rows]
+    summary = validate_results(recent, min_score=min_metric)
+
     table = Table(title="Recent Validations")
     table.add_column("variant")
     table.add_column("metric")
@@ -86,6 +172,7 @@ def validate(
         status = "PASS" if float(metric) >= min_metric else "FAIL"
         table.add_row(str(variant), f"{float(metric):.4f}", status)
     console.print(table)
+    console.print(summary)
 
 
 @app.command("graph")
