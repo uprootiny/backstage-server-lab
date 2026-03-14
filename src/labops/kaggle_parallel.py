@@ -66,9 +66,10 @@ class Ledger:
 
 
 def _build_nbconvert_cmd(job: NotebookJob, output_nb: Path) -> list[str]:
-    # Always execute nbconvert via the current Python environment to avoid
-    # picking a mismatched system jupyter binary from PATH.
-    cmd = [sys.executable, "-m", "nbconvert"]
+    exe = "jupyter-nbconvert" if shutil.which("jupyter-nbconvert") else "jupyter"
+    cmd = [exe]
+    if exe == "jupyter":
+        cmd.append("nbconvert")
     cmd.extend(
         [
         "--to",
@@ -89,7 +90,9 @@ def _build_nbconvert_cmd(job: NotebookJob, output_nb: Path) -> list[str]:
 
 
 def _ensure_nbconvert() -> bool:
-    probe = subprocess.run([sys.executable, "-m", "nbconvert", "--version"], capture_output=True, text=True)
+    if shutil.which("jupyter-nbconvert"):
+        return True
+    probe = subprocess.run(["jupyter", "nbconvert", "--version"], capture_output=True, text=True)
     if probe.returncode == 0:
         return True
     install = subprocess.run(
@@ -99,7 +102,9 @@ def _ensure_nbconvert() -> bool:
     )
     if install.returncode != 0:
         return False
-    probe2 = subprocess.run([sys.executable, "-m", "nbconvert", "--version"], capture_output=True, text=True)
+    if shutil.which("jupyter-nbconvert"):
+        return True
+    probe2 = subprocess.run(["jupyter", "nbconvert", "--version"], capture_output=True, text=True)
     return probe2.returncode == 0
 
 

@@ -1,56 +1,52 @@
 #!/usr/bin/env bash
-# start_tensorboard.sh — Start TensorBoard on port 6006 (Vast maps → external 19448)
 set -euo pipefail
 
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LOGDIR="${1:-/workspace/logs/rna}"
-PORT=6006
-BIND="0.0.0.0"
-REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+PORT="${TB_PORT:-6006}"
+HOST="${TB_HOST:-0.0.0.0}"
+LOGFILE="${TB_LOGFILE:-${LOGDIR%/}/tensorboard.log}"
 
-mkdir -p "$LOGDIR"
+if ! mkdir -p "${LOGDIR}" "$(dirname "${LOGFILE}")" 2>/dev/null; then
+  LOGDIR="/tmp/rna_tb"
+  LOGFILE="${TB_LOGFILE:-/tmp/tensorboard.log}"
+  mkdir -p "${LOGDIR}" "$(dirname "${LOGFILE}")"
+fi
+cd "${ROOT_DIR}"
 
-# Kill existing TensorBoard on this port
-echo "-> Stopping any existing TensorBoard on port $PORT..."
-pkill -f "tensorboard.*--port.*$PORT" 2>/dev/null || true
-sleep 1
-
-# Write a demo run if logdir is empty
-if [ -z "$(find "$LOGDIR" -name 'events.out.*' 2>/dev/null | head -1)" ]; then
-    echo "-> Logdir is empty — writing demo run..."
-    PYTHONPATH="$REPO_ROOT/src" python3 "$REPO_ROOT/src/labops/rna_tbx.py" "$LOGDIR"
-    echo "   Demo run written to $LOGDIR"
+# Stop prior tensorboard processes on this port.
+if command -v lsof >/dev/null 2>&1; then
+  PIDS="$(lsof -tiTCP:${PORT} -sTCP:LISTEN 2>/dev/null || true)"
+  if [[ -n "${PIDS}" ]]; then
+    echo "stopping existing tensorboard on :${PORT} (${PIDS})"
+    kill ${PIDS} 2>/dev/null || true
+    sleep 1
+    for p in ${PIDS}; do
+      if kill -0 "$p" 2>/dev/null; then kill -9 "$p" 2>/dev/null || true; fi
+    done
+  fi
 fi
 
-# Launch TensorBoard
-echo "-> Starting TensorBoard..."
-echo "  logdir : $LOGDIR"
-echo "  port   : $PORT  (external -> 19448)"
-echo ""
+# Seed demo events if logdir is empty.
+if [[ -z "$(find "${LOGDIR}" -type f -name 'events.out.tfevents.*' -print -quit)" ]]; then
+  echo "logdir empty, writing demo RNA events to ${LOGDIR}"
+  uv run python -m labops.rna_tbx --logdir "${LOGDIR}" --run-name "boot_demo"
+fi
 
-nohup python3 -m tensorboard.main \
-    --logdir      "$LOGDIR"   \
-    --port        $PORT        \
-    --bind_all                 \
-    --reload_interval 10       \
-    --samples_per_plugin "images=100,scalars=10000,histograms=500" \
-    --window_title "RNA 3D Training Lab" \
-    > /tmp/tensorboard.log 2>&1 &
+TB_CMD=""
+if uvx --from tensorboard tensorboard --version >/dev/null 2>&1; then
+  TB_CMD="uvx --from tensorboard tensorboard"
+else
+  TB_CMD="uv run tensorboard"
+fi
 
+nohup bash -lc "${TB_CMD} \
+  --logdir '${LOGDIR}' \
+  --host '${HOST}' \
+  --port '${PORT}' \
+  --reload_interval 10" \
+  >"${LOGFILE}" 2>&1 &
 TB_PID=$!
-echo "  PID    : $TB_PID"
-echo "  log    : /tmp/tensorboard.log"
 
-echo -n "  Waiting for TensorBoard to start"
-for i in $(seq 1 20); do
-    sleep 1
-    if curl -sf "http://localhost:$PORT/" > /dev/null 2>&1; then
-        echo ""
-        echo "OK TensorBoard is up on port $PORT"
-        exit 0
-    fi
-    echo -n "."
-done
-echo ""
-echo "WARNING: TensorBoard did not respond after 20s — check /tmp/tensorboard.log"
-tail -20 /tmp/tensorboard.log
-exit 1
+echo "tensorboard_started pid=${TB_PID} logdir=${LOGDIR} host=${HOST} port=${PORT}"
+echo "tail -f ${LOGFILE}"

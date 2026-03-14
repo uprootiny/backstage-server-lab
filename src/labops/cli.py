@@ -18,7 +18,6 @@ from .kaggle_parallel import init_plan as kaggle_parallel_init_plan
 from .kaggle_parallel import suggest_reruns as kaggle_parallel_suggest_reruns
 from .kaggle_parallel import summarize_ledger as kaggle_parallel_summarize_ledger
 from .notebook_ops import list_registry, profile_submission, register_submission
-from .notebook_pipeline import materialize_pipeline
 from .runner import run_experiment_file
 from .rna_ingest import ingest_result
 from .store import connect, insert_hypothesis
@@ -257,15 +256,6 @@ def submission_profile(
 ) -> None:
     info = profile_submission(path=input_path, sample_rows=sample_rows)
     console.print(info)
-
-
-@app.command("notebook-extract-pipeline")
-def notebook_extract_pipeline(
-    notebook: Path,
-    out_dir: Path = Path("artifacts/notebook_pipelines"),
-) -> None:
-    out = materialize_pipeline(path=notebook, out_root=out_dir)
-    console.print({k: str(v) for k, v in out.items()})
 
 
 @app.command("submission-register")

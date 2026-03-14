@@ -78,6 +78,18 @@ kaggle-parallel-status:
 kaggle-parallel-reruns:
 	. .venv/bin/activate && labops kaggle-parallel-reruns --ledger "$${LEDGER:-artifacts/kaggle_parallel/ledger.jsonl}" --min-voi "$${MIN_VOI:-0.12}" --limit "$${LIMIT:-12}"
 
+<<<<<<< HEAD
+=======
+rna-technique-matrix-plan:
+	uv run python scripts/build_rna_technique_matrix_plan.py --config "$${CONFIG_PATH:-configs/rna_technique_matrix.yaml}" --out-plan "$${PLAN_PATH:-artifacts/kaggle_parallel/plan_rna_technique_matrix.json}" --out-manifest "$${MANIFEST_PATH:-artifacts/kaggle_parallel/rna_technique_matrix_manifest.json}" --max-jobs "$${MAX_JOBS:-20}"
+
+rna-technique-matrix:
+	MAX_JOBS="$${MAX_JOBS:-20}" WORKERS="$${WORKERS:-3}" NOTEBOOK_OVERRIDES="$${NOTEBOOK_OVERRIDES:-}" bash scripts/run_rna_technique_matrix.sh
+
+rna-technique-validate:
+	uv run python scripts/validate_rna_technique_matrix.py --plan "$${PLAN_PATH:-artifacts/kaggle_parallel/plan_rna_technique_matrix.json}" --ledger "$${LEDGER:-artifacts/kaggle_parallel/ledger.jsonl}" --run-id "$${RUN_ID:-}" --out-json "$${OUT_JSON:-reports/rna_technique_matrix_validation.json}" --out-md "$${OUT_MD:-docs/RNA_TECHNIQUE_MATRIX_VALIDATION.md}"
+
+>>>>>>> origin/main
 notebook-pull:
 	. .venv/bin/activate && python scripts/pull_notebook_sources.py
 
@@ -87,6 +99,13 @@ notebook-interactive:
 notebook-clickthrough:
 	bash scripts/clickthrough_notebook_fabric.sh
 
+<<<<<<< HEAD
+=======
+notebook-extract:
+	@if [[ -z "$$NOTEBOOK" ]]; then echo "usage: make notebook-extract NOTEBOOK=notebooks/starters/02_rna_3d_training_filled.ipynb [OUT=artifacts/notebook_pipelines]"; exit 2; fi
+	. .venv/bin/activate && labops notebook-extract-pipeline "$$NOTEBOOK" --out-dir "$${OUT:-artifacts/notebook_pipelines}"
+
+>>>>>>> origin/main
 obs-setup:
 	bash scripts/setup_repo_observability.sh
 
@@ -99,6 +118,15 @@ obs-down:
 obs-probe:
 	bash scripts/probe_live_endpoints.sh
 
+<<<<<<< HEAD
+=======
+ci-secrets-instrument:
+	uv run python scripts/ci/instrument_secrets.py
+
+ci-vast-instrument:
+	uv run python scripts/ci/instrument_vast.py
+
+>>>>>>> origin/main
 tb:
 	. .venv/bin/activate && tensorboard --logdir artifacts --host 0.0.0.0 --port 6006
 
