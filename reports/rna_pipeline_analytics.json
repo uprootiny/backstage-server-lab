@@ -1,0 +1,44 @@
+{
+  "samples": 32,
+  "length": {
+    "mean": 46.75,
+    "std": 28.13472054241876,
+    "min": 11,
+    "max": 108
+  },
+  "pairing_fraction": {
+    "mean": 0.8070166742924304,
+    "std": 0.046541083682198885,
+    "min": 0.6666666666666666,
+    "max": 0.8888888888888888
+  },
+  "nesting_depth": {
+    "mean": 18.78125,
+    "std": 11.520998152829467,
+    "min": 4,
+    "max": 45
+  },
+  "graph_edges": {
+    "mean": 186.875,
+    "std": 116.20664514131711
+  },
+  "node_dims": [
+    16
+  ],
+  "edge_dims": [
+    9
+  ],
+  "egnn_probe": {
+    "pred_pf": 0.663072978106448,
+    "pred_nd": 0.44772194097698603,
+    "true_pf": 0.782608695652174,
+    "true_nd": 9
+  },
+  "invariants": {
+    "node_dim_is_16": true,
+    "edge_dim_is_9": true,
+    "tda_dim_is_48": true,
+    "no_nan_coords": true,
+    "no_nan_node_feats": true
+  }
+}

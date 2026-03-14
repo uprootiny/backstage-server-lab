@@ -1,0 +1,22 @@
+logging {
+  level  = "info"
+  format = "logfmt"
+}
+
+prometheus.scrape "local_node" {
+  targets = [
+    { __address__ = "127.0.0.1:1111", service = "mlflow" },
+    { __address__ = "127.0.0.1:6006", service = "tensorboard" },
+    { __address__ = "127.0.0.1:8511", service = "kaggle_mashup" },
+    { __address__ = "127.0.0.1:8522", service = "rna_workbench" },
+    { __address__ = "127.0.0.1:19999", service = "rna_bridge" }
+  ]
+  scrape_interval = "30s"
+  forward_to = [prometheus.remote_write.default.receiver]
+}
+
+prometheus.remote_write "default" {
+  endpoint {
+    url = env("PROM_REMOTE_WRITE_URL")
+  }
+}

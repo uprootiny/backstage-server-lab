@@ -1,0 +1,61 @@
+{
+  "generated_at": "2026-03-14T04:52:00Z",
+  "datasets": [
+    {
+      "id": "rfam",
+      "name": "Rfam",
+      "url": "https://rfam.org/",
+      "modality": "families, covariance models",
+      "use_case": "family-level RNA annotation and homology",
+      "license": "open"
+    },
+    {
+      "id": "rnacentral",
+      "name": "RNAcentral",
+      "url": "https://rnacentral.org/",
+      "modality": "sequence archive",
+      "use_case": "large-scale RNA sequence corpus",
+      "license": "open"
+    },
+    {
+      "id": "bp_rna",
+      "name": "bpRNA",
+      "url": "https://bprna.cgrb.oregonstate.edu/",
+      "modality": "secondary structure annotations",
+      "use_case": "dot-bracket and motif learning",
+      "license": "open"
+    },
+    {
+      "id": "archiveii",
+      "name": "ArchiveII",
+      "url": "https://rna.urmc.rochester.edu/pub/ArchiveII/",
+      "modality": "curated secondary structures",
+      "use_case": "benchmarking 2D predictors",
+      "license": "academic open"
+    },
+    {
+      "id": "pdb_nucleic",
+      "name": "PDB Nucleic Structures",
+      "url": "https://www.rcsb.org/",
+      "modality": "3D coordinates",
+      "use_case": "tertiary structure modeling and templates",
+      "license": "open access"
+    },
+    {
+      "id": "rna_puzzles",
+      "name": "RNA-Puzzles",
+      "url": "https://www.rnapuzzles.org/",
+      "modality": "blind challenge targets",
+      "use_case": "model evaluation under realistic constraints",
+      "license": "open challenge"
+    },
+    {
+      "id": "stanford_rna_3d_kaggle",
+      "name": "Stanford RNA 3D Folding (Kaggle)",
+      "url": "https://www.kaggle.com/competitions/stanford-rna-3d-folding-part-2",
+      "modality": "competition dataset",
+      "use_case": "benchmark + leaderboard experimentation",
+      "license": "competition terms"
+    }
+  ]
+}

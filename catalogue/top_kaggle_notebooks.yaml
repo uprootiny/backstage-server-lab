@@ -1,0 +1,19 @@
+notebooks:
+  - ref: llkh0a/stanford-rna-3d-folding-part-2-protenix-tbm
+    title: Protenix + TBM (RNA 3D Part 2)
+    rank_hint: top_cluster
+  - ref: iafoss/rna-starter
+    title: RNA Starter Baseline
+    rank_hint: baseline
+  - ref: hoyso48/stanford-ribonanza-2nd-place-solution
+    title: Stanford Ribonanza 2nd Place Summary
+    rank_hint: podium
+  - ref: gosuxd/openchemfold-rna3d
+    title: OpenChemFold RNA 3D
+    rank_hint: exploratory
+  - ref: shujunhe/ribonanzanet2-training-notes
+    title: RibonanzaNet2 Training Notes
+    rank_hint: transfer
+  - ref: sigmaborov/stanford-rna-3d-folding-top-1-solution
+    title: Stanford RNA 3D Folding — Top 1 Solution
+    rank_hint: top1

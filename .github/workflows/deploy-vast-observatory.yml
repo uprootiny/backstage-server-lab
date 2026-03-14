@@ -1,0 +1,46 @@
+name: deploy-vast-observatory
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.VAST_SSH_KEY }}" > ~/.ssh/vast_key
+          chmod 600 ~/.ssh/vast_key
+          ssh-keyscan -p "${{ secrets.VAST_SSH_PORT }}" "${{ secrets.VAST_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Sync repo to Vast
+        run: |
+          rsync -az --delete --exclude '.git' --exclude '.venv' \
+            -e "ssh -i ~/.ssh/vast_key -p ${{ secrets.VAST_SSH_PORT }}" \
+            ./ "${{ secrets.VAST_USER }}@${{ secrets.VAST_HOST }}:/workspace/backstage-server-lab/"
+
+      - name: Restart observatory on Vast
+        run: |
+          ssh -i ~/.ssh/vast_key -p "${{ secrets.VAST_SSH_PORT }}" "${{ secrets.VAST_USER }}@${{ secrets.VAST_HOST }}" '
+            cd /workspace/backstage-server-lab
+            pkill -f "streamlit run src/labops/kaggle_mashup_app.py" || true
+            nohup /venv/main/bin/streamlit run src/labops/kaggle_mashup_app.py --server.port 8520 --server.address 0.0.0.0 --server.headless true >/workspace/logs/observatory-8520.log 2>&1 &
+            sleep 5
+            curl -s -o /tmp/obs.out -w "%{http_code}" http://127.0.0.1:8520
+          '
+
+      - name: Probe public surfaces
+        run: |
+          set +e
+          for u in \
+            "https://generous-ladder-twins-sims.trycloudflare.com" \
+            "https://${{ secrets.VAST_HOST }}:19808"; do
+            code=$(curl -k -s -L -o /tmp/u.out -w '%{http_code}' "$u")
+            echo "$u -> $code"
+          done

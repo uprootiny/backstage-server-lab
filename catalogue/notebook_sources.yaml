@@ -1,0 +1,61 @@
+sources:
+  - id: protenix
+    name: Protenix
+    kind: github_repo
+    repo_url: https://github.com/bytedance/Protenix.git
+    branch: main
+    notebook_globs:
+      - "examples/**/*.ipynb"
+      - "**/*inference*.ipynb"
+    artifact_globs:
+      - "docs/**/*.md"
+      - "examples/**/*.json"
+    paramsets:
+      - profile: fast
+        params:
+          model_name: protenix_mini_default_v0.5.0
+          use_msa: false
+          n_cycle: 3
+      - profile: quality
+        params:
+          model_name: protenix_base_default_v1.0.0
+          use_msa: true
+          n_cycle: 6
+  - id: rna-fm
+    name: RNA-FM
+    kind: github_repo
+    repo_url: https://github.com/ml4bio/RNA-FM.git
+    branch: main
+    notebook_globs:
+      - "**/*.ipynb"
+    artifact_globs:
+      - "README.md"
+      - "examples/**/*"
+    paramsets:
+      - profile: embed_small
+        params:
+          max_len: 512
+          batch_size: 4
+      - profile: embed_large
+        params:
+          max_len: 1024
+          batch_size: 2
+  - id: rhofold
+    name: RhoFold
+    kind: github_repo
+    repo_url: https://github.com/ml4bio/RhoFold.git
+    branch: main
+    notebook_globs:
+      - "**/*.ipynb"
+    artifact_globs:
+      - "README.md"
+      - "configs/**/*.yaml"
+    paramsets:
+      - profile: baseline
+        params:
+          recycle: 3
+          use_template: false
+      - profile: template
+        params:
+          recycle: 6
+          use_template: true

@@ -1,0 +1,10 @@
+apiVersion: 1
+providers:
+  - name: BackstageRepoObservability
+    orgId: 1
+    folder: Backstage Repo
+    type: file
+    disableDeletion: false
+    editable: true
+    options:
+      path: /var/lib/grafana/dashboards

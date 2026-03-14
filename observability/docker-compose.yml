@@ -1,0 +1,50 @@
+services:
+  github-exporter:
+    image: ghcr.io/astral-sh/uv:python3.11-bookworm
+    container_name: bsl-github-exporter
+    working_dir: /app
+    command: >
+      sh -lc "uv run --with requests --with prometheus-client /app/observability/github_exporter.py"
+    environment:
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      GITHUB_REPOSITORY: ${GITHUB_REPOSITORY:-uprootiny/backstage-server-lab}
+      GITHUB_EXPORTER_POLL_SECONDS: ${GITHUB_EXPORTER_POLL_SECONDS:-90}
+      GITHUB_EXPORTER_PORT: 9171
+    volumes:
+      - ..:/app
+    ports:
+      - "9171:9171"
+
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    container_name: bsl-prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "9090:9090"
+    depends_on:
+      - github-exporter
+
+  grafana:
+    image: grafana/grafana:11.1.4
+    container_name: bsl-grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: 'false'
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+
+volumes:
+  grafana-data:
+  prometheus-data:

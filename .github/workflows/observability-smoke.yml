@@ -1,0 +1,52 @@
+name: observability-smoke
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - observability/**
+      - scripts/setup_repo_observability.sh
+      - scripts/probe_live_endpoints.sh
+      - .github/workflows/observability-smoke.yml
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_REPOSITORY: uprootiny/backstage-server-lab
+      GITHUB_EXPORTER_POLL_SECONDS: 30
+      GRAFANA_ADMIN_USER: admin
+      GRAFANA_ADMIN_PASSWORD: admin
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Start observability stack
+        run: |
+          cd observability
+          docker compose up -d
+
+      - name: Wait and probe
+        run: |
+          for i in {1..45}; do
+            p="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 4 http://127.0.0.1:9090/-/ready || true)"
+            g="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 4 http://127.0.0.1:3000/api/health || true)"
+            if [[ "$p" == "200" && "$g" == "200" ]]; then
+              break
+            fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:9171/metrics | head -n 20
+          curl -fsS 'http://127.0.0.1:9090/api/v1/query?query=github_repo_up'
+
+      - name: Save compose logs
+        if: always()
+        run: |
+          cd observability
+          docker compose ps
+          docker compose logs --no-color > ../observability-smoke.log
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: observability-smoke-log
+          path: observability-smoke.log

@@ -1,0 +1,165 @@
+techniques:
+  - id: tbm_ensemble
+    name: Template-Based Ensemble
+    source: kaggle:llkh0a/stanford-rna-3d-folding-part-2-protenix-tbm
+    stage: decoding
+    inputs: [sequence, template_hits]
+    outputs: [atom_coordinates]
+    strengths: [strong on long helices, robust on sparse motifs]
+    risks: [template leakage, weak on novel folds]
+    knobs: [template_weight, topk_templates, blend_temperature]
+  - id: pairwise_distogram_head
+    name: Pairwise Distogram Head
+    source: kaggle:stanford-rna-3d-folding references
+    stage: structure_head
+    inputs: [sequence_embedding]
+    outputs: [distance_matrix]
+    strengths: [good geometric prior]
+    risks: [distance-to-coordinate projection instability]
+    knobs: [dist_bins, dist_loss_weight]
+  - id: recycling_refinement
+    name: Recycling Refinement Loop
+    source: kaggle:rna 3d top solutions
+    stage: refinement
+    inputs: [initial_structure, pairwise_geometry]
+    outputs: [refined_structure]
+    strengths: [improves local geometry]
+    risks: [compute-heavy, overfit on easy motifs]
+    knobs: [recycle_steps, stop_threshold]
+  - id: confidence_calibration
+    name: Confidence Calibration (B-factor / pLDDT proxy)
+    source: kaggle:rna notebooks confidence heads
+    stage: scoring
+    inputs: [model_logits, structure]
+    outputs: [per_residue_confidence]
+    strengths: [interpretability, triage]
+    risks: [miscalibration under OOD]
+    knobs: [calibration_temp, confidence_floor]
+  - id: family_dropout_validation
+    name: Family Dropout Validation
+    source: validation:family_dropout_v1
+    stage: validation
+    inputs: [sequence_family_labels]
+    outputs: [generalization_metrics]
+    strengths: [realistic generalization estimate]
+    risks: [lower apparent LB vs public split]
+    knobs: [identity_threshold, heldout_families]
+  - id: sequence_length_curriculum
+    name: Sequence-Length Curriculum
+    source: public:common_rna_training_practice
+    stage: training
+    inputs: [sequence_batches]
+    outputs: [stabilized_training]
+    strengths: [improves convergence on long targets]
+    risks: [curriculum bias if too aggressive]
+    knobs: [length_bands, warmup_epochs]
+  - id: multi_seed_sampling
+    name: Multi-Seed Sampling
+    source: public:kaggle_solution_pattern
+    stage: inference
+    inputs: [model, sequence]
+    outputs: [sample_set]
+    strengths: [robustness, uncertainty estimation]
+    risks: [higher cost]
+    knobs: [seed_count, seed_schedule]
+  - id: confidence_weighted_ensemble
+    name: Confidence-Weighted Ensemble
+    source: public:kaggle_solution_pattern
+    stage: decoding
+    inputs: [sample_set, per_residue_confidence]
+    outputs: [blended_structure]
+    strengths: [better stability on hard motifs]
+    risks: [can overfit confidence calibration errors]
+    knobs: [weight_floor, blend_rule]
+  - id: structure_delta_analysis
+    name: Structure Delta Analysis
+    source: observatory:compare_view
+    stage: interpretation
+    inputs: [run_a_coordinates, run_b_coordinates]
+    outputs: [residue_delta_map, contact_delta]
+    strengths: [precise failure localization]
+    risks: [false positives if alignment poor]
+    knobs: [alignment_mode, delta_threshold]
+  - id: motif_error_tagging
+    name: Motif Error Tagging
+    source: public:rna_evaluation_practice
+    stage: interpretation
+    inputs: [structure_delta, motif_annotations]
+    outputs: [error_tags]
+    strengths: [actionable debugging]
+    risks: [annotation coverage gaps]
+    knobs: [motif_set, tag_threshold]
+  - id: voi_priority_scheduler
+    name: VOI Priority Scheduler
+    source: observatory:voi_compass
+    stage: orchestration
+    inputs: [candidate_experiments, cost_estimates]
+    outputs: [ranked_queue]
+    strengths: [better use of GPU budget]
+    risks: [depends on VOI calibration]
+    knobs: [uncertainty_weight, cost_weight, novelty_weight]
+  - id: run_manifest_contract
+    name: Run Manifest Contract
+    source: mlops:reproducibility_contract
+    stage: governance
+    inputs: [run_metadata]
+    outputs: [manifest_json]
+    strengths: [traceability and rerun confidence]
+    risks: [extra implementation overhead]
+    knobs: [required_fields, hash_policy]
+  - id: typed_operator_events
+    name: Typed Operator Events
+    source: observability:operator_trace
+    stage: observability
+    inputs: [service_logs, runner_events]
+    outputs: [typed_event_stream]
+    strengths: [searchable operational memory]
+    risks: [event taxonomy drift]
+    knobs: [kind_taxonomy, retention_days]
+  - id: protenix_prep_pipeline
+    name: Protenix Prep Pipeline
+    source: github:bytedance/protenix
+    stage: preprocessing
+    inputs: [input_json, seq_db, rna_msa_db]
+    outputs: [msa_features, template_features, rna_msa_features]
+    strengths: [high-quality features for downstream prediction]
+    risks: [external binary/db dependency]
+    knobs: [use_template, use_rna_msa, prep_mode]
+  - id: mixed_precision_guardrails
+    name: Mixed-Precision Guardrails
+    source: github:bytedance/protenix
+    stage: inference
+    inputs: [token_count, inference_config]
+    outputs: [amp_policy]
+    strengths: [reduces OOM without blind precision drop]
+    risks: [numerical instability if thresholds wrong]
+    knobs: [token_thresholds, fp32_modules]
+
+bundles:
+  - id: baseline_reliable
+    description: Stable baseline for first-pass leaderboard and diagnostics.
+    techniques:
+      - run_manifest_contract
+      - sequence_length_curriculum
+      - pairwise_distogram_head
+      - recycling_refinement
+      - confidence_calibration
+      - family_dropout_validation
+  - id: high_score_pragmatic
+    description: Practical high-score stack with fallback behavior.
+    techniques:
+      - tbm_ensemble
+      - protenix_prep_pipeline
+      - multi_seed_sampling
+      - confidence_weighted_ensemble
+      - recycling_refinement
+      - confidence_calibration
+  - id: insight_maximizer
+    description: Optimized for interpretability and iterative scientific decisions.
+    techniques:
+      - run_manifest_contract
+      - typed_operator_events
+      - structure_delta_analysis
+      - motif_error_tagging
+      - voi_priority_scheduler
+      - family_dropout_validation
