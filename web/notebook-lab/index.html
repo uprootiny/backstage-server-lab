@@ -194,6 +194,115 @@
 
   .sidebar-demo .btn { width: 100%; text-align: center; }
 
+  /* ---- SIDEBAR TABS ---- */
+  .sidebar-tabs {
+    display: flex;
+    border-bottom: 1px solid var(--cream-12);
+  }
+
+  .sidebar-tab {
+    flex: 1;
+    padding: 8px 4px;
+    font-family: var(--mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    text-align: center;
+    color: var(--cream-30);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    transition: all 0.15s;
+    border-bottom: 2px solid transparent;
+  }
+
+  .sidebar-tab:hover { color: var(--cream-60); }
+  .sidebar-tab.active { color: var(--jade); border-bottom-color: var(--jade); }
+
+  .sidebar-panel { display: none; flex-direction: column; flex: 1; overflow: hidden; }
+  .sidebar-panel.active { display: flex; }
+
+  /* ---- PIPELINE STAGES ---- */
+  .stage-item {
+    padding: 10px 14px;
+    cursor: pointer;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    transition: background 0.1s;
+    font-size: 12px;
+    color: var(--cream-60);
+    border-bottom: 1px solid var(--cream-12);
+  }
+
+  .stage-item:hover { background: var(--bg-2); color: var(--cream); }
+  .stage-item.completed { border-left: 2px solid var(--jade); }
+  .stage-item.running { border-left: 2px solid var(--amber); }
+
+  .stage-num {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    border: 1px solid var(--cream-30);
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--cream-30);
+    flex-shrink: 0;
+    transition: all 0.2s;
+  }
+
+  .stage-item.completed .stage-num {
+    border-color: var(--jade);
+    color: var(--jade);
+    background: var(--jade-20);
+  }
+
+  .stage-item.running .stage-num {
+    border-color: var(--amber);
+    color: var(--amber);
+    background: var(--amber-20);
+    animation: pulse-dot 1s infinite;
+  }
+
+  .stage-info { flex: 1; min-width: 0; }
+  .stage-name { font-weight: 600; font-size: 12px; margin-bottom: 2px; }
+  .stage-desc { font-size: 10px; color: var(--cream-30); line-height: 1.4; }
+
+  /* ---- PROGRESS BAR ---- */
+  .run-all-progress {
+    padding: 8px 14px;
+    border-top: 1px solid var(--cream-12);
+    display: none;
+  }
+
+  .run-all-progress.active { display: block; }
+
+  .progress-bar-track {
+    width: 100%;
+    height: 4px;
+    background: var(--bg);
+    border-radius: 2px;
+    overflow: hidden;
+    margin-bottom: 6px;
+  }
+
+  .progress-bar-fill {
+    height: 100%;
+    background: var(--jade);
+    border-radius: 2px;
+    transition: width 0.3s ease;
+    width: 0%;
+  }
+
+  .progress-label {
+    font-size: 10px;
+    color: var(--cream-30);
+    text-align: center;
+  }
+
   /* ---- NOTEBOOK ---- */
   #notebook-area {
     flex: 1;
@@ -510,14 +619,35 @@
 <div id="app">
   <!-- SIDEBAR -->
   <div id="sidebar">
-    <div class="sidebar-header">Notebooks</div>
-    <div class="sidebar-list" id="sidebar-list">
-      <div class="sidebar-item" style="color:var(--cream-30);font-size:11px;justify-content:center;padding:24px;">
-        Loading...
+    <div class="sidebar-tabs">
+      <button class="sidebar-tab active" data-panel="files-panel">Files</button>
+      <button class="sidebar-tab" data-panel="pipeline-panel">Pipeline</button>
+    </div>
+
+    <!-- FILES PANEL -->
+    <div class="sidebar-panel active" id="files-panel">
+      <div class="sidebar-header">Notebooks</div>
+      <div class="sidebar-list" id="sidebar-list">
+        <div class="sidebar-item" style="color:var(--cream-30);font-size:11px;justify-content:center;padding:24px;">
+          Loading...
+        </div>
+      </div>
+      <div class="sidebar-demo">
+        <button class="btn primary" id="btn-demo" title="Load demo pipeline notebook">Load Demo Notebook</button>
       </div>
     </div>
-    <div class="sidebar-demo">
-      <button class="btn primary" id="btn-demo" title="Load demo pipeline notebook">Load Demo Notebook</button>
+
+    <!-- PIPELINE STAGES PANEL -->
+    <div class="sidebar-panel" id="pipeline-panel">
+      <div class="sidebar-header">Pipeline Stages</div>
+      <div class="sidebar-list" id="stages-list"></div>
+      <div class="run-all-progress" id="run-all-progress">
+        <div class="progress-bar-track"><div class="progress-bar-fill" id="progress-fill"></div></div>
+        <div class="progress-label" id="progress-label">Ready</div>
+      </div>
+      <div class="sidebar-demo">
+        <button class="btn primary" id="btn-run-pipeline" title="Run all pipeline stages sequentially">Run Full Pipeline</button>
+      </div>
     </div>
   </div>
 

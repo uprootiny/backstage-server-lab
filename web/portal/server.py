@@ -50,6 +50,11 @@ async def portal_index():
     index = WEB_DIR / "portal" / "index.html"
     return index.read_text()
 
+@app.get("/poster", response_class=HTMLResponse)
+async def poster_page():
+    poster = WEB_DIR / "portal" / "poster.html"
+    return poster.read_text()
+
 @app.get("/api/gpu-status")
 async def gpu_status():
     try:
