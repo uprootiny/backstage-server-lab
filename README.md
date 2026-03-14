@@ -36,6 +36,28 @@ Default URL:
 http://127.0.0.1:8511
 ```
 
+## Notebook Showcase (Landing)
+
+Featured starter notebook for RNA geometric generation + dataset export:
+
+- [`notebooks/starters/02_rna_3d_training_filled.ipynb`](notebooks/starters/02_rna_3d_training_filled.ipynb)
+- Executed on Vast through the common harness as `nb-filled-ok2`
+- Output artifact: `artifacts/kaggle_parallel/rna_3d_training_filled_smoke.npz`
+
+Preview illustration:
+
+![RNA 3D training preview](docs/assets/rna_3d_training_filled_preview.png)
+
+Integrated contest notebook (new):
+
+- `sigmaborov/stanford-rna-3d-folding-top-1-solution` pulled into:
+  - [`notebooks/kaggle/sigmaborov-top1/stanford-rna-3d-folding-top-1-solution.ipynb`](notebooks/kaggle/sigmaborov-top1/stanford-rna-3d-folding-top-1-solution.ipynb)
+  - local-adapted repro notebook:
+    - [`notebooks/kaggle/sigmaborov-top1/stanford-rna-3d-folding-top-1-solution.local.ipynb`](notebooks/kaggle/sigmaborov-top1/stanford-rna-3d-folding-top-1-solution.local.ipynb)
+- Reproduced through `kaggle_parallel` as job `sigmaborov-local-004` (`status=ok`)
+- Repro note:
+  - [`docs/NOTEBOOK_REPRO_SIGMABOROV_TOP1.md`](docs/NOTEBOOK_REPRO_SIGMABOROV_TOP1.md)
+
 ## Core Idea
 
 Treat external notebooks as instruments that can be decomposed and recombined:
@@ -61,6 +83,31 @@ Single-command clone/bootstrap:
 ```bash
 bash scripts/vast_clone_bootstrap.sh https://github.com/uprootiny/backstage-server-lab.git /workspace/backstage-server-lab
 ```
+
+## Methodical Reliability Loop
+
+For reliable, constraint-aware MLOps (doctor first, then runs):
+
+```bash
+cd /workspace/backstage-server-lab
+
+# 1) Reality check (+ optional auto-heal)
+AUTO_HEAL=1 bash scripts/doctor_harness.sh
+
+# 2) Algorithmic composition + coherence checks
+bash scripts/integration_coherence_checks.sh
+
+# 3) Dispatch several dozen full pipeline runs
+WORKERS=4 JOBS=36 TIMEOUT_MIN=35 bash scripts/dispatch_rna_bulk.sh
+
+# 4) Live teardown of top Kaggle RNA notebooks
+TOP_N=12 bash scripts/teardown_kaggle_rna_top12.sh
+```
+
+Detailed instructions:
+- `docs/MEANINGFUL_RESULTS_RUNBOOK.md`
+- `docs/FOOLPROOF_WALKTHROUGH.md`
+- `docs/ENGINEERING_MEMO_ALGO_COMPOSITION.md`
 
 ## Daily Operations
 
@@ -232,6 +279,17 @@ Outputs:
 - `artifacts/kaggle_parallel/plan.json`
 - `artifacts/kaggle_parallel/ledger.jsonl`
 
+Extract any notebook into a standalone pipeline contract:
+
+```bash
+make notebook-extract NOTEBOOK=notebooks/starters/02_rna_3d_training_filled.ipynb
+```
+
+Outputs:
+- `artifacts/notebook_pipelines/<notebook-stem>/manifest.json`
+- `artifacts/notebook_pipelines/<notebook-stem>/pipeline.yaml`
+- `artifacts/notebook_pipelines/<notebook-stem>/run.sh`
+
 ## RNA Workbench + Bridge
 
 Start artifact bridge:
@@ -281,6 +339,18 @@ make rna-ingest INPUT=/path/result.csv RUN_ID=exp42 SEQUENCE=AUGCUA MODEL=my-mod
 - Python runtime and package execution should use `uv`/`uvx` consistently.
 - Repo commands assume `.venv` created via `uv venv` and hydrated with `uv pip`.
 - Exporter container also uses `uv run` to avoid mixed package managers.
+
+## CI Instrumentation
+
+Generate safe (presence-only) CI token/secret and Vast CLI instrumentation reports:
+
+```bash
+make ci-secrets-instrument
+make ci-vast-instrument
+```
+
+Automated workflow:
+- `.github/workflows/ci-instrumentation.yml`
 
 ## Layout
 

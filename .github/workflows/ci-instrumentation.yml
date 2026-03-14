@@ -1,0 +1,52 @@
+name: ci-instrumentation
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - "scripts/ci/**"
+      - ".github/workflows/ci-instrumentation.yml"
+      - "Makefile"
+
+jobs:
+  instrument:
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      VAST_API_KEY: ${{ secrets.VAST_API_KEY }}
+      VAST_HOST: ${{ secrets.VAST_HOST }}
+      VAST_USER: ${{ secrets.VAST_USER }}
+      VAST_SSH_PORT: ${{ secrets.VAST_SSH_PORT }}
+      VAST_SSH_KEY: ${{ secrets.VAST_SSH_KEY }}
+      KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+      KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install Vast CLI (best effort)
+        run: |
+          set -euxo pipefail
+          uv tool install vastai || true
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          command -v vastai || true
+
+      - name: Run instrumentation reports
+        run: |
+          set -euxo pipefail
+          uv run python scripts/ci/instrument_secrets.py
+          uv run python scripts/ci/instrument_vast.py
+
+      - name: Upload instrumentation artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-instrumentation-reports
+          path: |
+            reports/ci/secrets_status.json
+            reports/ci/secrets_status.md
+            reports/ci/vast_status.json
+            reports/ci/vast_status.md
