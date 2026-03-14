@@ -6,6 +6,7 @@ import json
 import math
 import re
 import subprocess
+import time
 from pathlib import Path
 import sys
 from typing import Any
@@ -867,6 +868,53 @@ def profile_submission_csv(path: Path) -> dict[str, Any]:
 def render_pipeline_tab() -> None:
     st.subheader("Pipeline Observatory")
     st.caption("State -> execution -> interpretation -> prioritization.")
+
+    # Hero renders at the top
+    art = _repo_root() / "artifacts"
+    hero_renders = ["rna_hero_3d.png", "rna_showcase.png", "rna_sweep_leaderboard.png"]
+    hero_files = [art / f for f in hero_renders if (art / f).exists()]
+    if hero_files:
+        cols = st.columns(len(hero_files))
+        for c, f in zip(cols, hero_files):
+            c.image(str(f), caption=f.stem.replace("rna_", "").replace("_", " "), use_container_width=True)
+
+    # Baseline summary
+    bl_path = art / "baseline_leaderboard.json"
+    if bl_path.exists():
+        bl = json.loads(bl_path.read_text())
+        paths = bl.get("paths", {})
+        bcols = st.columns(3)
+        for i, (pname, entries) in enumerate(paths.items()):
+            with bcols[i % 3]:
+                best = min(entries, key=lambda x: -x.get("tm_score_mean", -x.get("mae_overall", -x.get("mcrmse", 999))))
+                metric_key = "tm_score_mean" if "tm_score_mean" in best else ("mae_overall" if "mae_overall" in best else "mcrmse")
+                st.metric(pname.replace("_", " ").title(), f"{best[metric_key]:.4f}", delta=f"best: {best['strategy']}")
+
+    # Training runs
+    logs_dir = Path("/workspace/logs/rna")
+    if logs_dir.exists():
+        runs = sorted(logs_dir.iterdir())
+        if runs:
+            st.markdown(f"### TensorBoard Runs ({len(runs)} total)")
+            run_info = []
+            for d in runs:
+                if d.is_dir():
+                    events = list(d.glob("events.out.*"))
+                    sz = sum(f.stat().st_size for f in events)
+                    run_info.append({"run": d.name, "events": len(events), "size_kb": round(sz/1024, 1)})
+            if run_info:
+                st.dataframe(pd.DataFrame(run_info), use_container_width=True, height=200)
+
+    # Checkpoints
+    ckpt_dir = art / "checkpoints"
+    if ckpt_dir.exists():
+        ckpts = list(ckpt_dir.glob("*.pt"))
+        if ckpts:
+            st.markdown("### Model Checkpoints")
+            for c in ckpts:
+                st.markdown(f"- `{c.name}` — {c.stat().st_size/1e6:.2f} MB")
+
+    st.markdown("---")
     stages = [
         "1. Ingest notebook output",
         "2. Detect submission format",
@@ -2545,19 +2593,23 @@ def render_project_card_enhanced(
                 break
 
 
+def _repo_root() -> Path:
+    """Return absolute path to repo root."""
+    return Path(__file__).resolve().parent.parent.parent
+
+
 def render_gallery_tab() -> None:
     """Inline render gallery with all 25 RNA visualizations."""
     st.subheader("RNA Visualization Gallery")
-    st.caption("25 phosphor-aesthetic renders covering 3D structures, folding dynamics, TDA, and training results.")
+    st.caption("25 phosphor-aesthetic renders covering 3D structures, folding dynamics, TDA, and training results. Each is reproducible via the rendering pipeline.")
 
-    ARTIFACTS = Path("artifacts")
+    ARTIFACTS = _repo_root() / "artifacts"
     renders = sorted(ARTIFACTS.glob("rna_*.png"))
 
     if not renders:
-        st.warning("No renders found in artifacts/. Run the rendering pipeline first.")
+        st.warning("No renders found. Run: `PYTHONPATH=src python3 -c 'from labops.rna_3d_pipeline import ...'`")
         return
 
-    # Organize by category
     categories = {
         "3D Structures": ["rna_hero_3d", "rna_gallery_12", "rna_gallery", "rna_showcase", "rna_looptype_3d", "rna_noise_comparison"],
         "Secondary Structure": ["rna_arcs", "rna_comparative_arcs", "rna_mountains", "rna_pair_probability"],
@@ -2579,11 +2631,7 @@ def render_gallery_tab() -> None:
                 st.image(str(rpath), caption=rpath.stem.replace("rna_", "").replace("_", " ").title(),
                          use_container_width=True)
 
-    # Show any uncategorized renders
-    categorized = set()
-    for stems in categories.values():
-        categorized.update(stems)
-    uncategorized = [r for r in renders if r.stem not in categorized]
+    uncategorized = [r for r in renders if r.stem not in set(s for v in categories.values() for s in v)]
     if uncategorized:
         st.markdown("### Other")
         cols = st.columns(3)
@@ -2592,6 +2640,26 @@ def render_gallery_tab() -> None:
                 st.image(str(r), caption=r.stem, use_container_width=True)
 
     st.metric("Total Renders", len(renders))
+
+    # Baselines summary
+    bl_path = ARTIFACTS / "baseline_leaderboard.json"
+    if bl_path.exists():
+        bl = json.loads(bl_path.read_text())
+        st.markdown("---")
+        st.subheader("Baseline Leaderboard (23 baselines × 3 paths)")
+        for path_name, entries in bl.get("paths", {}).items():
+            st.markdown(f"**{path_name}**")
+            st.dataframe(pd.DataFrame(entries), use_container_width=True, height=200)
+
+    # Checkpoints & models
+    ckpt_dir = ARTIFACTS / "checkpoints"
+    if ckpt_dir.exists():
+        ckpts = list(ckpt_dir.glob("*.pt"))
+        if ckpts:
+            st.markdown("---")
+            st.subheader("Model Checkpoints")
+            for c in ckpts:
+                st.markdown(f"- `{c.name}` — {c.stat().st_size / 1e6:.2f} MB — {time.strftime('%Y-%m-%d %H:%M', time.localtime(c.stat().st_mtime))}")
 
 
 def render_architecture_tab() -> None:
