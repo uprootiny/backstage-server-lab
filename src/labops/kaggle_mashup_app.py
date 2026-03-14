@@ -714,6 +714,15 @@ def _nb_url(path: str) -> str:
     return f"{JUPYTER_BASE_URL}/lab/tree/{p}"
 
 
+def _kaggle_code_url(ref_or_url: str) -> str:
+    s = str(ref_or_url or "").strip()
+    if not s:
+        return ""
+    if s.startswith("http://") or s.startswith("https://"):
+        return s
+    return f"https://www.kaggle.com/code/{s}"
+
+
 def _tail_text(path: str, max_bytes: int = 12000) -> str:
     try:
         f = Path(path)
@@ -918,28 +927,43 @@ def render_registry_tab() -> None:
         st.info("No submission registry rows yet. Use `make submission-register`.")
         return
 
+    show = df.copy()
+    if "notebook_ref" in show.columns:
+        show["notebook_url"] = show["notebook_ref"].astype(str).apply(_kaggle_code_url)
+    if "viewer_url" in show.columns:
+        show["viewer_open"] = show["viewer_url"].astype(str)
     display_cols = [
         c
         for c in [
             "created_at",
             "notebook_ref",
+            "notebook_url",
             "run_id",
             "mark",
             "tm_score",
             "lddt",
             "format",
             "viewer_url",
+            "viewer_open",
             "breadcrumb",
         ]
-        if c in df.columns
+        if c in show.columns
     ]
-    st.dataframe(df[display_cols], use_container_width=True, height=380)
+    st.dataframe(
+        show[display_cols],
+        use_container_width=True,
+        height=380,
+        column_config={
+            "notebook_url": st.column_config.LinkColumn("Notebook source"),
+            "viewer_open": st.column_config.LinkColumn("Viewer"),
+        },
+    )
 
-    choices = df.index.tolist()
+    choices = show.index.tolist()
     selected = st.multiselect("compare 2", choices, default=choices[:2] if len(choices) >= 2 else choices)
     if len(selected) == 2:
-        left = df.loc[selected[0]].to_dict()
-        right = df.loc[selected[1]].to_dict()
+        left = show.loc[selected[0]].to_dict()
+        right = show.loc[selected[1]].to_dict()
         ltm = float(left.get("tm_score", 0) or 0)
         rtm = float(right.get("tm_score", 0) or 0)
         lld = float(left.get("lddt", 0) or 0)
@@ -1462,13 +1486,45 @@ def render_sources_tab() -> None:
     c2.metric("Pull OK", summary["pull_ok"])
     c3.metric("Notebooks", summary["notebooks_found"])
     c4.metric("Artifacts", summary["artifacts_found"])
+    base_cols = [c for c in ["id", "name", "repo_url", "branch", "pull_ok", "pulled_at"] if c in df.columns]
+    show_df = df[base_cols].copy()
+    if "repo_url" in show_df.columns:
+        show_df["repo"] = show_df["repo_url"].astype(str)
     st.dataframe(
-        df[
-            [c for c in ["id", "name", "repo_url", "branch", "pull_ok", "pulled_at"] if c in df.columns]
-        ],
+        show_df,
         use_container_width=True,
         height=260,
+        column_config={"repo": st.column_config.LinkColumn("Repository")},
     )
+
+    st.markdown("### Notebook inventory (clickable)")
+    inv_rows: list[dict[str, Any]] = []
+    for r in rows:
+        sid = str(r.get("id", ""))
+        for nb in (r.get("notebooks", []) or [])[:50]:
+            p = f"notebooks/external/{sid}/{nb}"
+            inv_rows.append(
+                {
+                    "source_id": sid,
+                    "notebook": nb,
+                    "open_local": _nb_url(p),
+                    "repo_url": str(r.get("repo_url", "")),
+                    "pull_ok": bool(r.get("pull_ok", False)),
+                }
+            )
+    if inv_rows:
+        inv_df = pd.DataFrame(inv_rows)
+        st.dataframe(
+            inv_df,
+            use_container_width=True,
+            height=260,
+            column_config={
+                "open_local": st.column_config.LinkColumn("Open local notebook"),
+                "repo_url": st.column_config.LinkColumn("Source repo"),
+            },
+        )
+    else:
+        st.info("No notebooks listed in current source index.")
     st.markdown("### Techniques and param profiles")
     for r in rows:
         sid = r.get("id", "")
@@ -1537,6 +1593,17 @@ def render_ops_tab() -> None:
         rows.append({"surface": name, "url": url, "http_code": code, "state": "UP" if code in (200, 401, 403) else "DOWN"})
     probes = pd.DataFrame(rows)
     st.dataframe(probes, use_container_width=True, height=220)
+    gcol1, gcol2 = st.columns([1, 1])
+    gcol1.link_button("Open Grafana", GRAFANA_URL, use_container_width=True)
+    if rows and rows[1]["state"] == "UP":
+        with st.expander("Grafana inline", expanded=False):
+            components.html(
+                f"<iframe src='{GRAFANA_URL}' width='100%' height='620' style='border:0'></iframe>",
+                height=640,
+                scrolling=True,
+            )
+    else:
+        gcol2.info("Grafana is down. Use start observability stack action.")
     if st.button("Refresh probes"):
         st.rerun()
     if st.button("Start repo observability stack"):
@@ -1574,18 +1641,65 @@ def render_top_notebooks_tab() -> None:
     rows = payload.get("digests", []) if isinstance(payload, dict) else []
     if rows:
         df = pd.DataFrame(rows)
-        cols = [c for c in ["ref", "title", "pulled", "techniques", "key_params", "summary", "repro_cmd"] if c in df.columns]
+        if "ref" in df.columns:
+            df["kaggle_url"] = df["ref"].astype(str).apply(_kaggle_code_url)
+        if "local_path" in df.columns:
+            df["open_local"] = df["local_path"].astype(str).apply(_nb_url)
+        cols = [
+            c
+            for c in [
+                "ref",
+                "title",
+                "kaggle_url",
+                "open_local",
+                "pulled",
+                "stage_hints",
+                "techniques",
+                "datasets_read",
+                "artifacts_written",
+                "key_params",
+                "what_it_does",
+                "summary",
+                "repro_cmd",
+            ]
+            if c in df.columns
+        ]
         sel = st.text_input("Filter ref/title", value="")
         f = df.copy()
         if sel.strip():
             mask = f["ref"].astype(str).str.contains(sel, case=False, na=False) | f["title"].astype(str).str.contains(sel, case=False, na=False)
             f = f[mask]
-        st.dataframe(f[cols], use_container_width=True, height=360)
+        st.dataframe(
+            f[cols],
+            use_container_width=True,
+            height=420,
+            column_config={
+                "kaggle_url": st.column_config.LinkColumn("Kaggle notebook"),
+                "open_local": st.column_config.LinkColumn("Local replica"),
+            },
+        )
         if not f.empty and "repro_cmd" in f.columns:
-            st.markdown("### Repro command")
+            st.markdown("### Replication + analysis")
             chosen = st.selectbox("Select notebook", options=f["ref"].tolist())
             row = f[f["ref"] == chosen].head(1).to_dict(orient="records")[0]
+            st.write(
+                {
+                    "what_it_does": row.get("what_it_does", ""),
+                    "stage_hints": row.get("stage_hints", []),
+                    "datasets_read": row.get("datasets_read", []),
+                    "artifacts_written": row.get("artifacts_written", []),
+                }
+            )
+            c1, c2 = st.columns(2)
+            if str(row.get("kaggle_url", "")).strip():
+                c1.link_button("Open Kaggle source", str(row.get("kaggle_url", "")), use_container_width=True)
+            if str(row.get("open_local", "")).strip():
+                c2.link_button("Open local notebook", str(row.get("open_local", "")), use_container_width=True)
             st.code(str(row.get("repro_cmd", "")), language="bash")
+            if st.button("Run replication command", key=f"repro_{chosen}"):
+                out = run_local_command(["bash", "-lc", str(row.get("repro_cmd", ""))], timeout_sec=900)
+                st.code((out.get("stdout", "") + "\n" + out.get("stderr", "")).strip()[:7000], language="text")
+                emit_event("top_notebook.repro", "top_notebooks_tab", f"ok={out.get('ok')} ref={chosen}")
     if TOP_NOTEBOOK_DIGEST_PATH.exists():
         with st.expander("Digest markdown", expanded=False):
             st.markdown(TOP_NOTEBOOK_DIGEST_PATH.read_text())
