@@ -1,0 +1,14 @@
+{
+  "name": "backstage-server-lab-observatory",
+  "image": "vastai/tensorflow:2.19.0-cuda-12.4.1",
+  "disk": 120,
+  "ssh": true,
+  "direct": true,
+  "env": {
+    "JUPYTER_DIR": "/workspace",
+    "DATA_DIRECTORY": "/workspace",
+    "OPEN_BUTTON_PORT": "1111"
+  },
+  "onstart": "bash /workspace/backstage-server-lab/deploy/vast/onstart.sh",
+  "ports": [22, 8080, 1111, 6006, 8511, 8522, 19842, 19999]
+}
