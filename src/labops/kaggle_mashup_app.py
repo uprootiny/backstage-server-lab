@@ -17,6 +17,7 @@ SEED_ROWS_PATH = Path("data/seeds/kaggle_rna_seed_rows.json")
 SEED_CATALOGUE_PATH = Path("data/seeds/kaggle_rna_seed_catalogue.json")
 REGISTRY_PATH = Path("artifacts/notebook_submission_registry.jsonl")
 PARALLEL_PLAN_PATH = Path("artifacts/kaggle_parallel/plan.json")
+PARALLEL_PLAN_YAML_PATH = Path("artifacts/kaggle_parallel/plan.yaml")
 PARALLEL_LEDGER_PATH = Path("artifacts/kaggle_parallel/ledger.jsonl")
 LIVE_ENDPOINTS_PATH = Path("docs/LIVE_ENDPOINTS.md")
 LOG_DIR = Path("logs")
@@ -148,12 +149,20 @@ def load_registry() -> pd.DataFrame:
 
 
 def load_parallel_plan() -> dict[str, Any]:
-    if not PARALLEL_PLAN_PATH.exists():
-        return {}
-    try:
-        return json.loads(PARALLEL_PLAN_PATH.read_text())
-    except Exception:
-        return {}
+    if PARALLEL_PLAN_PATH.exists():
+        try:
+            return json.loads(PARALLEL_PLAN_PATH.read_text())
+        except Exception:
+            return {}
+    if PARALLEL_PLAN_YAML_PATH.exists():
+        try:
+            import yaml
+
+            raw = yaml.safe_load(PARALLEL_PLAN_YAML_PATH.read_text())
+            return raw if isinstance(raw, dict) else {}
+        except Exception:
+            return {}
+    return {}
 
 
 def load_parallel_ledger() -> pd.DataFrame:

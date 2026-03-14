@@ -3,9 +3,13 @@ from __future__ import annotations
 import json
 import os
 import shlex
+import shutil
 import subprocess
+import sys
 import threading
 import time
+from urllib.error import URLError
+from urllib.request import urlopen
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -62,9 +66,12 @@ class Ledger:
 
 
 def _build_nbconvert_cmd(job: NotebookJob, output_nb: Path) -> list[str]:
-    cmd = [
-        "jupyter",
-        "nbconvert",
+    exe = "jupyter-nbconvert" if shutil.which("jupyter-nbconvert") else "jupyter"
+    cmd = [exe]
+    if exe == "jupyter":
+        cmd.append("nbconvert")
+    cmd.extend(
+        [
         "--to",
         "notebook",
         "--execute",
@@ -74,20 +81,49 @@ def _build_nbconvert_cmd(job: NotebookJob, output_nb: Path) -> list[str]:
         "--output-dir",
         str(output_nb.parent),
         f"--ExecutePreprocessor.timeout={int(job.timeout_min) * 60}",
-    ]
+        ]
+    )
     if job.params:
         for k, v in job.params.items():
             cmd.extend(["--ExecutePreprocessor.kernel_name", str(v)]) if k == "kernel_name" else None
     return cmd
 
 
-def load_plan(path: Path) -> tuple[dict[str, Any], list[NotebookJob]]:
-    raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+def _ensure_nbconvert() -> bool:
+    if shutil.which("jupyter-nbconvert"):
+        return True
+    probe = subprocess.run(["jupyter", "nbconvert", "--version"], capture_output=True, text=True)
+    if probe.returncode == 0:
+        return True
+    install = subprocess.run(
+        [sys.executable, "-m", "pip", "install", "--disable-pip-version-check", "nbconvert", "nbformat", "jupyter"],
+        capture_output=True,
+        text=True,
+    )
+    if install.returncode != 0:
+        return False
+    if shutil.which("jupyter-nbconvert"):
+        return True
+    probe2 = subprocess.run(["jupyter", "nbconvert", "--version"], capture_output=True, text=True)
+    return probe2.returncode == 0
+
+
+def _read_any_plan(path: Path) -> dict[str, Any]:
+    text = path.read_text(encoding="utf-8")
+    if path.suffix.lower() == ".json":
+        raw = json.loads(text)
+    else:
+        raw = yaml.safe_load(text)
     if not isinstance(raw, dict):
-        raise ValueError("plan yaml must be a mapping")
+        raise ValueError("plan must be a mapping")
+    return raw
+
+
+def load_plan(path: Path) -> tuple[dict[str, Any], list[NotebookJob]]:
+    raw = _read_any_plan(path)
     jobs_raw = raw.get("jobs", [])
     if not isinstance(jobs_raw, list):
-        raise ValueError("plan yaml 'jobs' must be a list")
+        raise ValueError("plan 'jobs' must be a list")
 
     jobs: list[NotebookJob] = []
     for i, j in enumerate(jobs_raw):
@@ -108,6 +144,25 @@ def load_plan(path: Path) -> tuple[dict[str, Any], list[NotebookJob]]:
     return raw, jobs
 
 
+def _cache_dataset(url: str, cache_dir: Path, retries: int, backoff_sec: float) -> dict[str, Any]:
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    target = cache_dir / Path(url.split("?")[0]).name
+    if target.exists() and target.stat().st_size > 0:
+        return {"url": url, "path": str(target), "status": "cached", "bytes": int(target.stat().st_size)}
+
+    for attempt in range(1, retries + 1):
+        try:
+            with urlopen(url, timeout=60) as r:  # nosec B310
+                payload = r.read()
+            target.write_bytes(payload)
+            return {"url": url, "path": str(target), "status": "downloaded", "bytes": len(payload)}
+        except URLError as e:
+            if attempt >= retries:
+                return {"url": url, "path": str(target), "status": "failed", "error": str(e)}
+            time.sleep(backoff_sec * (2 ** (attempt - 1)))
+    return {"url": url, "path": str(target), "status": "failed", "error": "unknown"}
+
+
 def dispatch(
     plan_path: Path,
     concurrency: int,
@@ -123,6 +178,14 @@ def dispatch(
     executed_dir.mkdir(parents=True, exist_ok=True)
     ledger = Ledger(ledger_path)
 
+    retry_cfg = cfg.get("retries", {}) if isinstance(cfg.get("retries", {}), dict) else {}
+    max_attempts = int(retry_cfg.get("max_attempts", 3))
+    backoff_sec = float(retry_cfg.get("backoff_sec", 4.0))
+
+    datasets_cfg = cfg.get("datasets", [])
+    cache_dir = Path(cfg.get("dataset_cache_dir", "artifacts/datasets/cache"))
+
+    has_nbconvert = _ensure_nbconvert()
     # Run metadata event
     run_id = f"kaggle-parallel-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}"
     ledger.append(
@@ -134,8 +197,27 @@ def dispatch(
             "concurrency": int(concurrency),
             "job_count": len(jobs),
             "profile": cfg.get("profile", "custom"),
+            "max_attempts": max_attempts,
+            "nbconvert_ready": has_nbconvert,
         }
     )
+
+    if isinstance(datasets_cfg, list):
+        for d in datasets_cfg:
+            if not isinstance(d, dict):
+                continue
+            url = str(d.get("url", "")).strip()
+            if not url:
+                continue
+            cache_res = _cache_dataset(url=url, cache_dir=cache_dir, retries=max_attempts, backoff_sec=backoff_sec)
+            ledger.append(
+                {
+                    "ts": _now(),
+                    "event": "dataset_cache",
+                    "run_id": run_id,
+                    **cache_res,
+                }
+            )
 
     def run_job(job: NotebookJob) -> dict[str, Any]:
         started = time.time()
@@ -168,11 +250,35 @@ def dispatch(
             }
             ledger.append({"ts": _now(), "event": "job_end", "run_id": run_id, **res})
             return res
+        if not has_nbconvert:
+            ended = time.time()
+            res = {
+                "job_id": job.job_id,
+                "status": "missing_executor",
+                "exit_code": 127,
+                "seconds": round(ended - started, 2),
+                "log": str(log_file),
+                "output_notebook": str(output_nb),
+                "voi": round(job.voi, 6),
+            }
+            ledger.append({"ts": _now(), "event": "job_end", "run_id": run_id, **res})
+            return res
 
+        attempts: list[dict[str, Any]] = []
+        code = 1
         with log_file.open("w", encoding="utf-8") as lf:
             lf.write(f"# job={job.job_id}\n# ts={_now()}\n# cmd={' '.join(shlex.quote(x) for x in cmd)}\n\n")
-            proc = subprocess.run(cmd, stdout=lf, stderr=subprocess.STDOUT, text=True)
-            code = int(proc.returncode)
+            for attempt in range(1, max_attempts + 1):
+                lf.write(f"\n# attempt={attempt}/{max_attempts} ts={_now()}\n")
+                proc = subprocess.run(cmd, stdout=lf, stderr=subprocess.STDOUT, text=True)
+                code = int(proc.returncode)
+                attempts.append({"attempt": attempt, "exit_code": code})
+                if code == 0:
+                    break
+                if attempt < max_attempts:
+                    sleep_for = backoff_sec * (2 ** (attempt - 1))
+                    lf.write(f"# backoff_sleep={sleep_for}s\n")
+                    time.sleep(sleep_for)
 
         ended = time.time()
         status = "ok" if code == 0 else "failed"
@@ -184,6 +290,7 @@ def dispatch(
             "log": str(log_file),
             "output_notebook": str(output_nb),
             "voi": round(job.voi, 6),
+            "attempts": attempts,
         }
         ledger.append({"ts": _now(), "event": "job_end", "run_id": run_id, **res})
         return res

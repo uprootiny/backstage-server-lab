@@ -20,6 +20,13 @@
       "path": "notebooks/starters/03_rna_eval_workbench_bridge.ipynb",
       "focus": "Export and register PDB predictions",
       "description": "Write PDB outputs and register them to artifacts/rna_predictions for workbench fetch."
+    },
+    {
+      "id": "interactive_pipeline_orchestrator",
+      "title": "Interactive Pipeline Orchestrator",
+      "path": "notebooks/starters/04_interactive_pipeline_orchestrator.ipynb",
+      "focus": "Pull repos, expand paramsets, dispatch parallel runs with retries",
+      "description": "Widget-based control notebook that hands off jobs to the common kaggle_parallel harness."
     }
   ]
 }

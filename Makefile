@@ -78,6 +78,15 @@ kaggle-parallel-status:
 kaggle-parallel-reruns:
 	. .venv/bin/activate && labops kaggle-parallel-reruns --ledger "$${LEDGER:-artifacts/kaggle_parallel/ledger.jsonl}" --min-voi "$${MIN_VOI:-0.12}" --limit "$${LIMIT:-12}"
 
+notebook-pull:
+	. .venv/bin/activate && python scripts/pull_notebook_sources.py
+
+notebook-interactive:
+	. .venv/bin/activate && python scripts/build_interactive_orchestrator_notebook.py
+
+notebook-clickthrough:
+	bash scripts/clickthrough_notebook_fabric.sh
+
 obs-setup:
 	bash scripts/setup_repo_observability.sh
 

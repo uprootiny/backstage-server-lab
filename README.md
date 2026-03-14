@@ -219,6 +219,19 @@ make kaggle-parallel-status
 make kaggle-parallel-reruns MIN_VOI=0.05 LIMIT=10
 ```
 
+Interactive/common harness for external repos + paramsets:
+
+```bash
+make notebook-pull
+make notebook-interactive
+make notebook-clickthrough
+```
+
+Outputs:
+- `artifacts/notebook_sources/index.json`
+- `artifacts/kaggle_parallel/plan.json`
+- `artifacts/kaggle_parallel/ledger.jsonl`
+
 ## RNA Workbench + Bridge
 
 Start artifact bridge:
