@@ -1,8 +1,8 @@
 # RNA Technique Matrix Validation
 
-- generated_at: 2026-03-14T17:49:40.846827Z
+- generated_at: 2026-03-14T17:50:59.554904Z
 - run_id: `kaggle-parallel-20260314T174604Z`
-- plan: `/home/uprootiny/backstage-server-lab/artifacts/kaggle_parallel/plan_rna_technique_matrix.json`
+- plan: `artifacts/kaggle_parallel/plan_rna_technique_matrix.json`
 - expected_jobs: 9
 - observed_jobs: 9
 - ok: 9

@@ -266,6 +266,29 @@ make kaggle-parallel-status
 make kaggle-parallel-reruns MIN_VOI=0.05 LIMIT=10
 ```
 
+Technique-matrix baselines (technique recombination + parameter perturbations + validation loop):
+
+```bash
+# plan only (inspect first)
+make rna-technique-matrix-plan MAX_JOBS=20
+
+# run matrix + validate in one pass
+make rna-technique-matrix MAX_JOBS=20 WORKERS=3
+
+# optional: force heavy techniques onto a faster notebook during smoke runs
+make rna-technique-matrix MAX_JOBS=9 WORKERS=2 \
+  NOTEBOOK_OVERRIDES='high_score_pragmatic=notebooks/starters/03_rna_eval_workbench_bridge.ipynb'
+
+# regenerate validation report for a specific run id
+make rna-technique-validate RUN_ID=kaggle-parallel-20260314T174604Z
+```
+
+Outputs:
+- `artifacts/kaggle_parallel/plan_rna_technique_matrix.json`
+- `artifacts/kaggle_parallel/rna_technique_matrix_manifest.json`
+- `reports/rna_technique_matrix_validation.json`
+- `docs/RNA_TECHNIQUE_MATRIX_VALIDATION.md`
+
 Interactive/common harness for external repos + paramsets:
 
 ```bash
