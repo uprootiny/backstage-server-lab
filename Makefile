@@ -31,6 +31,20 @@ kaggle-mashup:
 kaggle-catalogue:
 	. .venv/bin/activate && bash scripts/build_kaggle_catalogue.sh rna 120 artifacts/kaggle_catalogue.json
 
+kaggle-minimap:
+	. .venv/bin/activate && labops kaggle-notebook-minimap --search rna --limit 300 --out-json artifacts/kaggle_rna_notebooks_minimap.json --out-md docs/KAGGLE_RNA_NOTEBOOK_MINIMAP.md
+
+submission-profile:
+	@if [[ -z "$$INPUT" ]]; then echo "usage: make submission-profile INPUT=/path/submission.csv"; exit 2; fi
+	. .venv/bin/activate && labops submission-profile "$$INPUT"
+
+submission-register:
+	@if [[ -z "$$NOTEBOOK" || -z "$$INPUT" ]]; then echo "usage: make submission-register NOTEBOOK=user/notebook INPUT=/path/submission.csv [MARK=candidate] [BREADCRUMB=...] [SEQUENCE=...] [MODEL=...] [RUN_ID=...]"; exit 2; fi
+	. .venv/bin/activate && labops submission-register "$$NOTEBOOK" "$$INPUT" --mark "$${MARK:-candidate}" --breadcrumb "$${BREADCRUMB:-}" --sequence "$${SEQUENCE:-}" --model "$${MODEL:-unknown}" --run-id "$${RUN_ID:-}"
+
+submission-list:
+	. .venv/bin/activate && labops submission-list
+
 rna-bridge:
 	bash scripts/start_rna_artifact_bridge.sh
 
@@ -44,6 +58,25 @@ rna-register:
 rna-ingest:
 	@if [[ -z "$$INPUT" ]]; then echo "usage: make rna-ingest INPUT=/path/result.(pdb|csv|json|npy|npz) [RUN_ID=...] [SEQUENCE=...] [MODEL=...]"; exit 2; fi
 	. .venv/bin/activate && labops ingest-result "$$INPUT" --run-id "$${RUN_ID:-}" --sequence "$${SEQUENCE:-}" --model "$${MODEL:-unknown}"
+
+technique-list:
+	. .venv/bin/activate && labops technique-list
+
+technique-compose:
+	@if [[ -z "$$IDS" ]]; then echo "usage: make technique-compose IDS=tbm_ensemble,recycling_refinement,confidence_calibration"; exit 2; fi
+	. .venv/bin/activate && labops technique-compose "$$IDS"
+
+obs-setup:
+	bash scripts/setup_repo_observability.sh
+
+obs-up:
+	bash scripts/start_repo_observability.sh
+
+obs-down:
+	bash scripts/stop_repo_observability.sh
+
+obs-probe:
+	bash scripts/probe_live_endpoints.sh
 
 tb:
 	. .venv/bin/activate && tensorboard --logdir artifacts --host 0.0.0.0 --port 6006

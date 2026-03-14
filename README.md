@@ -1,16 +1,29 @@
 # Backstage Server Lab
 
-A clone-friendly, single-node ML/dev workspace optimized for Vast.ai Jupyter boxes and SSH-driven operations.
+A clone-friendly research playground for RNA ML that turns Kaggle notebooks, model outputs, and GPU runs into legible, comparable scientific artifacts.
 
-## Design goals
+## What This Repository Is
 
-- one-command bootstrap on a fresh GPU worker
-- reproducible Python/toolchain via `mise` + `uv`
-- comfy terminal/Jupyter setup (`tmux`, sensible defaults, aliases)
-- minimal MLOps spine (MLflow + TensorBoard + run logs)
-- explicit durability hooks (artifact sync)
+This is not only a training script collection.
+It is a working lab runtime with five integrated surfaces:
 
-## Quick start (on Vast / Jupyter terminal)
+1. **Experiment orchestration** (`labops`) for hypothesis-driven runs.
+2. **Notebook/result intelligence** for profiling and registering submissions.
+3. **RNA visualization surfaces** (workbench + artifact bridge).
+4. **Technique recomposition tools** (minimap + composition templates).
+5. **Repo observability** (GitHub exporter + Prometheus + Grafana).
+
+## Core Idea
+
+Treat external notebooks as instruments that can be decomposed and recombined:
+
+```text
+Kaggle notebook -> profile -> normalize -> register -> visualize -> compare -> compose -> rerun
+```
+
+This keeps methods reusable and results explainable.
+
+## Quick Start (GPU Worker)
 
 ```bash
 git clone https://github.com/uprootiny/backstage-server-lab.git backstage-server-lab
@@ -20,34 +33,95 @@ make up
 make sanity
 ```
 
-Single-command clone + bootstrap:
+Single-command clone/bootstrap:
 
 ```bash
 bash scripts/vast_clone_bootstrap.sh https://github.com/uprootiny/backstage-server-lab.git /workspace/backstage-server-lab
 ```
 
-## Daily workflow
+## Daily Operations
 
 ```bash
 cd backstage-server-lab
+git pull
 make up
-make train-stub
-make bench
-make doctor
-make down
+make kaggle-minimap
+make technique-compose IDS=tbm_ensemble,recycling_refinement,confidence_calibration
+labops run artifacts/technique_compositions/composed_experiment.yaml --workers 3
+make obs-probe
 ```
 
-## Validation Bench (Python + uv/uvx style)
+## Live URL Surfaces
 
-This repo now includes a hypothesis-driven validation bench with:
+### Local defaults
 
-- 3 variants in parallel
-- parameter wiggle exploration
-- hypothesis + VOI tracking
-- validation gates
-- thesis/result graph export with Kaggle/paper references
+- MLflow: `http://127.0.0.1:1111`
+- TensorBoard: `http://127.0.0.1:6006`
+- Kaggle Mashup: `http://127.0.0.1:8511`
+- RNA Artifact Bridge index: `http://127.0.0.1:19999/index.json`
+- RNA Workbench: `http://127.0.0.1:8522/rna_workbench.html`
+- Grafana: `http://127.0.0.1:3000`
+- Prometheus: `http://127.0.0.1:9090`
+- GitHub exporter metrics: `http://127.0.0.1:9171/metrics`
 
-Run:
+### Probed remote surfaces (example)
+
+- MetaOps Grafana: `http://173.212.203.211:19300`
+- Vast Jupyter port: `https://175.155.64.231:19808`
+- Vast portal tunnel: `https://broadband-petroleum-camera-clear.trycloudflare.com/#/apps`
+- Vast Jupyter tunnel: `https://alignment-vacations-abilities-conclusion.trycloudflare.com`
+- Vast TensorBoard tunnel: `https://consistency-personnel-draft-ordering.trycloudflare.com`
+- Vast Syncthing tunnel: `https://luther-identification-room-export.trycloudflare.com`
+
+Generate a fresh live status report:
+
+```bash
+make obs-probe
+```
+
+Output:
+
+- `docs/LIVE_ENDPOINTS.md`
+
+## Observability (GitHub -> Prometheus -> Grafana)
+
+Bring up stack:
+
+```bash
+make obs-setup
+```
+
+Stop stack:
+
+```bash
+make obs-down
+```
+
+Includes provisioned dashboard:
+
+- `observability/grafana/dashboards/backstage_repo_observability.json`
+
+Detailed runbook:
+
+- `docs/REPO_OBSERVABILITY.md`
+
+### Fallback deployment tracks
+
+Use this if local path is unavailable:
+
+```bash
+bash scripts/deploy_observability_fallback.sh auto
+```
+
+Modes:
+
+- `local` (docker compose on current machine)
+- `vast` (sync + deploy on remote Vast host via `VAST_HOST`)
+- `actions` (GitHub Actions smoke fallback)
+
+## Validation Bench (Hypothesis-Driven)
+
+Run a bench:
 
 ```bash
 bash scripts/run_validation_bench.sh hypothesis-demo
@@ -56,106 +130,115 @@ bash scripts/run_validation_bench.sh hypothesis-demo
 Core commands:
 
 ```bash
-labops formulate --hypothesis-id hyp-1 --statement "..." --question "..." --voi-prior 0.7 --kaggle-ref playground-series --paper-ref https://arxiv.org/abs/1810.04805
-labops run-bench --hypothesis-id hyp-1 --config configs/validation_bench.yaml --workers 3
+labops formulate --hypothesis-id h1 --statement "..." --question "..." --voi-prior 0.7
+labops run-bench --hypothesis-id h1 --config configs/validation_bench.yaml --workers 3
 labops validate --min-metric 0.70
 labops graph --out artifacts/thesis_graph.json
 ```
 
-See: `docs/MLOPS_VALIDATION_BENCH.md`
+## Kaggle Notebook Mass Study + Technique Recomposition
 
-## Kaggle Mashup UI
-
-A mashup UI to sort/filter competitions/challenges and datasets:
+Build minimap:
 
 ```bash
-bash scripts/run_kaggle_mashup.sh
+make kaggle-minimap
 ```
 
-Open:
-
-- `http://<host>:8511`
-
-Requires Kaggle auth (`~/.kaggle/kaggle.json` or `KAGGLE_USERNAME` + `KAGGLE_KEY`).
-
-Build structured RNA-focused catalogue (competitions/models/notebooks/datasets):
+View techniques:
 
 ```bash
-make kaggle-catalogue
+make technique-list
 ```
 
-Output:
+Compose known tricks into an executable plan:
 
-- `artifacts/kaggle_catalogue.json`
+```bash
+make technique-compose IDS=tbm_ensemble,pairwise_distogram_head,recycling_refinement,confidence_calibration,family_dropout_validation
+```
 
-The mashup app can refresh/read this catalogue in the `Structured Catalogue` tab.
-If Kaggle auth is missing, the viewer is prepopulated from repo seeds in `data/seeds/`.
+Outputs:
 
-## Starter notebook library
+- `artifacts/kaggle_rna_notebooks_minimap.json`
+- `docs/KAGGLE_RNA_NOTEBOOK_MINIMAP.md`
+- `artifacts/technique_compositions/latest.yaml`
+- `artifacts/technique_compositions/composed_experiment.yaml`
 
-Curated local starters are versioned in:
+## Submission Intelligence Layer
 
-- `notebooks/starters/`
-- `notebooks/starters/index.json`
+Profile a submission format:
 
-Includes:
+```bash
+make submission-profile INPUT=/path/to/submission.csv
+```
 
-- RNA EDA baseline
-- RNA 3D training stub
-- RNA eval + workbench artifact bridge
+Register a notebook submission with breadcrumbs/marking:
 
-## RNA prediction bridge (workbench input path)
+```bash
+make submission-register NOTEBOOK=user/notebook INPUT=/path/to/submission.csv MARK=review BREADCRUMB="candidate for ensemble+recycling"
+```
 
-Serve prediction artifacts for external workbenches/3D viewers:
+List registry:
+
+```bash
+make submission-list
+```
+
+This keeps a durable trail at:
+
+- `artifacts/notebook_submission_registry.jsonl`
+
+## RNA Workbench + Bridge
+
+Start artifact bridge:
 
 ```bash
 make rna-bridge
-make rna-register PDB=/path/to/prediction.pdb RUN_ID=exp42 SEQUENCE=AUGC MODEL=baseline-v1
 ```
 
-Bridge index:
-
-- `http://<host>:19999/index.json`
-
-Prediction URL shape:
-
-- `http://<host>:19999/<run_id>/prediction.pdb`
-
-Universal ingestion from notebook outputs:
-
-```bash
-make rna-ingest INPUT=/path/result.(pdb|csv|json|npy|npz) RUN_ID=exp42 SEQUENCE=AUGCUA MODEL=my-model
-```
-
-This normalizes diverse outputs into:
-
-- `artifacts/rna_predictions/<run_id>/prediction.pdb`
-- `artifacts/rna_predictions/index.json`
-
-## RNA 3D Workbench
-
-Serve the interactive viewer (quick-load targets, URL fetch, bridge fetch, overlay controls, residue strip, compare panel):
+Start viewer:
 
 ```bash
 make rna-workbench
 ```
 
-Open:
+Register an existing PDB prediction quickly:
 
-- `http://<host>:8522/rna_workbench.html`
+```bash
+make rna-register PDB=/path/to/prediction.pdb RUN_ID=exp42 SEQUENCE=AUGC MODEL=baseline-v1
+```
+
+Universal ingest (pdb/csv/json/npy/npz):
+
+```bash
+make rna-ingest INPUT=/path/result.csv RUN_ID=exp42 SEQUENCE=AUGCUA MODEL=my-model
+```
+
+## Reading Tracks
+
+- RNA playground system design: `docs/READING_TRACK_RNA_PLAYGROUND.md`
+- Validation bench details: `docs/MLOPS_VALIDATION_BENCH.md`
+- Kaggle RNA catalogue notes: `docs/KAGGLE_RNA_CATALOGUE.md`
+- Vast worker operations: `docs/GPU_WORKER_OPERATIONS.md`
+- Repo observability runbook: `docs/REPO_OBSERVABILITY.md`
+- Script execution evidence: `docs/SCRIPT_EXECUTION_LEDGER.md`
+
+## Dependency Policy
+
+- Python runtime and package execution should use `uv`/`uvx` consistently.
+- Repo commands assume `.venv` created via `uv venv` and hydrated with `uv pip`.
+- Exporter container also uses `uv run` to avoid mixed package managers.
 
 ## Layout
 
-- `scripts/` setup and service management
-- `src/` training and utility code
-- `configs/` experiment configs
-- `artifacts/` checkpoints/models/tb logs
-- `logs/` service and run logs
-- `docs/` operational notes
+- `src/labops/` experiment + ingestion + CLI
+- `scripts/` operations, launchers, probes
+- `observability/` exporter + Prometheus + Grafana as code
+- `catalogue/` technique and model metadata
+- `docs/` runbooks and reading tracks
+- `artifacts/` generated outputs
 
 ## Notes
 
-- If the Vast instance has no attached volume, treat local state as ephemeral.
-- Use `make sync DEST=user@host:/path/backup` frequently.
-- Operator runbook: `docs/GPU_WORKER_OPERATIONS.md`
-- Connectivity report: `docs/CONNECTION_DOCTOR.md` via `make doctor`
+- If the instance has no attached volume, local state is ephemeral.
+- Sync critical artifacts frequently (`make sync DEST=user@host:/path`).
+- Keep token files and `.env` out of git.

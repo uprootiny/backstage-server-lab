@@ -12,9 +12,12 @@ from rich.table import Table
 from .bench import export_thesis_graph, run_bench
 from .datasets.kaggle_catalogue import build_catalogue
 from .datasets.kaggle import sync_kaggle
+from .kaggle_mass_study import build_notebook_minimap
+from .notebook_ops import list_registry, profile_submission, register_submission
 from .runner import run_experiment_file
 from .rna_ingest import ingest_result
 from .store import connect, insert_hypothesis
+from .techniques import compose_techniques, load_techniques
 from .validation import validate_results
 from .voi import value_of_information
 
@@ -115,6 +118,44 @@ def kaggle_init(ref: str, out: Path = Path("experiments")) -> None:
     console.print(f"[green]experiment initialized[/green] {p}")
 
 
+@app.command("kaggle-notebook-minimap")
+def kaggle_notebook_minimap(
+    search: str = "rna",
+    limit: int = 300,
+    out_json: Path = Path("artifacts/kaggle_rna_notebooks_minimap.json"),
+    out_md: Path = Path("docs/KAGGLE_RNA_NOTEBOOK_MINIMAP.md"),
+) -> None:
+    j, m = build_notebook_minimap(search=search, limit=limit, out_json=out_json, out_md=out_md)
+    console.print({"json": str(j), "markdown": str(m)})
+
+
+@app.command("technique-list")
+def technique_list(path: Path = Path("catalogue/techniques/rna_notebook_techniques.yaml")) -> None:
+    rows = load_techniques(path=path)
+    table = Table(title="Technique Library")
+    table.add_column("id")
+    table.add_column("name")
+    table.add_column("stage")
+    table.add_column("source")
+    for r in rows:
+        table.add_row(str(r.get("id", "")), str(r.get("name", "")), str(r.get("stage", "")), str(r.get("source", "")))
+    console.print(table)
+
+
+@app.command("technique-compose")
+def technique_compose(
+    ids: str,
+    hypothesis: str = "Composed strategy improves structural fidelity",
+    dataset: str = "kaggle/stanford-rna-3d-folding-part-2",
+    path: Path = Path("catalogue/techniques/rna_notebook_techniques.yaml"),
+    out: Path = Path("artifacts/technique_compositions/latest.yaml"),
+) -> None:
+    selected = [x.strip() for x in ids.split(",") if x.strip()]
+    t = load_techniques(path=path)
+    outp = compose_techniques(selected_ids=selected, all_techniques=t, hypothesis=hypothesis, dataset=dataset, out=out)
+    console.print({"composition": str(outp), "suggested_experiment": str(out.parent / "composed_experiment.yaml")})
+
+
 @app.command("ingest-result")
 def ingest_result_cmd(
     input_path: Path,
@@ -156,6 +197,60 @@ def ingest_result_cmd(
             "pdb_url": f"{public_base.rstrip('/')}/{rid}/prediction.pdb",
         }
     )
+
+
+@app.command("submission-profile")
+def submission_profile(
+    input_path: Path,
+    sample_rows: int = 200,
+) -> None:
+    info = profile_submission(path=input_path, sample_rows=sample_rows)
+    console.print(info)
+
+
+@app.command("submission-register")
+def submission_register(
+    notebook_ref: str,
+    submission_path: Path,
+    mark: str = "candidate",
+    breadcrumb: str = "",
+    sequence: str = "",
+    model: str = "unknown",
+    run_id: str = "",
+    bridge_base: str = "http://127.0.0.1:19999",
+) -> None:
+    row = register_submission(
+        notebook_ref=notebook_ref,
+        submission_path=submission_path,
+        mark=mark,
+        breadcrumb=breadcrumb,
+        sequence=sequence,
+        model=model,
+        run_id=run_id,
+        bridge_base=bridge_base,
+    )
+    console.print(row)
+
+
+@app.command("submission-list")
+def submission_list(limit: int = 50) -> None:
+    rows = list_registry()
+    table = Table(title="Notebook Submission Registry")
+    table.add_column("created")
+    table.add_column("notebook")
+    table.add_column("format")
+    table.add_column("mark")
+    table.add_column("viewer_url")
+    for r in rows[-limit:]:
+        profile = r.get("profile", {}) if isinstance(r, dict) else {}
+        table.add_row(
+            str(r.get("created_at", "")),
+            str(r.get("notebook_ref", "")),
+            str(profile.get("format", "")),
+            str(r.get("mark", "")),
+            str(r.get("viewer_url", "")),
+        )
+    console.print(table)
 
 
 @app.command("formulate")

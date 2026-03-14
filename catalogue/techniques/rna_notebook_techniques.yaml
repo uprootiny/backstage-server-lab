@@ -1,0 +1,46 @@
+techniques:
+  - id: tbm_ensemble
+    name: Template-Based Ensemble
+    source: kaggle:llkh0a/stanford-rna-3d-folding-part-2-protenix-tbm
+    stage: decoding
+    inputs: [sequence, template_hits]
+    outputs: [atom_coordinates]
+    strengths: [strong on long helices, robust on sparse motifs]
+    risks: [template leakage, weak on novel folds]
+    knobs: [template_weight, topk_templates, blend_temperature]
+  - id: pairwise_distogram_head
+    name: Pairwise Distogram Head
+    source: kaggle:stanford-rna-3d-folding references
+    stage: structure_head
+    inputs: [sequence_embedding]
+    outputs: [distance_matrix]
+    strengths: [good geometric prior]
+    risks: [distance-to-coordinate projection instability]
+    knobs: [dist_bins, dist_loss_weight]
+  - id: recycling_refinement
+    name: Recycling Refinement Loop
+    source: kaggle:rna 3d top solutions
+    stage: refinement
+    inputs: [initial_structure, pairwise_geometry]
+    outputs: [refined_structure]
+    strengths: [improves local geometry]
+    risks: [compute-heavy, overfit on easy motifs]
+    knobs: [recycle_steps, stop_threshold]
+  - id: confidence_calibration
+    name: Confidence Calibration (B-factor / pLDDT proxy)
+    source: kaggle:rna notebooks confidence heads
+    stage: scoring
+    inputs: [model_logits, structure]
+    outputs: [per_residue_confidence]
+    strengths: [interpretability, triage]
+    risks: [miscalibration under OOD]
+    knobs: [calibration_temp, confidence_floor]
+  - id: family_dropout_validation
+    name: Family Dropout Validation
+    source: validation:family_dropout_v1
+    stage: validation
+    inputs: [sequence_family_labels]
+    outputs: [generalization_metrics]
+    strengths: [realistic generalization estimate]
+    risks: [lower apparent LB vs public split]
+    knobs: [identity_threshold, heldout_families]

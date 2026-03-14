@@ -1,0 +1,98 @@
+{
+  "annotations": {"list": []},
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Repo Up",
+      "gridPos": {"h": 4, "w": 4, "x": 0, "y": 0},
+      "targets": [{"expr": "github_repo_up{repo='uprootiny/backstage-server-lab'}", "refId": "A"}],
+      "fieldConfig": {"defaults": {"thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 1}]}}}
+    },
+    {
+      "type": "stat",
+      "title": "Open PRs",
+      "gridPos": {"h": 4, "w": 4, "x": 4, "y": 0},
+      "targets": [{"expr": "github_repo_open_prs{repo='uprootiny/backstage-server-lab'}", "refId": "A"}]
+    },
+    {
+      "type": "stat",
+      "title": "Open Issues",
+      "gridPos": {"h": 4, "w": 4, "x": 8, "y": 0},
+      "targets": [{"expr": "github_repo_open_issues{repo='uprootiny/backstage-server-lab'}", "refId": "A"}]
+    },
+    {
+      "type": "stat",
+      "title": "Commits (24h)",
+      "gridPos": {"h": 4, "w": 4, "x": 12, "y": 0},
+      "targets": [{"expr": "github_repo_commits_24h{repo='uprootiny/backstage-server-lab'}", "refId": "A"}]
+    },
+    {
+      "type": "stat",
+      "title": "Workflow Failures (7d)",
+      "gridPos": {"h": 4, "w": 4, "x": 16, "y": 0},
+      "targets": [{"expr": "github_actions_workflow_failures_7d{repo='uprootiny/backstage-server-lab'}", "refId": "A"}]
+    },
+    {
+      "type": "stat",
+      "title": "Contributors",
+      "gridPos": {"h": 4, "w": 4, "x": 20, "y": 0},
+      "targets": [{"expr": "github_repo_contributors{repo='uprootiny/backstage-server-lab'}", "refId": "A"}]
+    },
+    {
+      "type": "timeseries",
+      "title": "Commits 24h",
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 4},
+      "targets": [{"expr": "github_repo_commits_24h{repo='uprootiny/backstage-server-lab'}", "refId": "A"}]
+    },
+    {
+      "type": "timeseries",
+      "title": "Open PRs / Open Issues",
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 4},
+      "targets": [
+        {"expr": "github_repo_open_prs{repo='uprootiny/backstage-server-lab'}", "legendFormat": "open_prs", "refId": "A"},
+        {"expr": "github_repo_open_issues{repo='uprootiny/backstage-server-lab'}", "legendFormat": "open_issues", "refId": "B"}
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Workflow Runs / Failures (7d)",
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 4},
+      "targets": [
+        {"expr": "github_actions_workflow_runs_7d{repo='uprootiny/backstage-server-lab'}", "legendFormat": "runs_7d", "refId": "A"},
+        {"expr": "github_actions_workflow_failures_7d{repo='uprootiny/backstage-server-lab'}", "legendFormat": "failures_7d", "refId": "B"}
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Stars / Forks / Releases",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 12},
+      "targets": [
+        {"expr": "github_repo_stars{repo='uprootiny/backstage-server-lab'}", "legendFormat": "stars", "refId": "A"},
+        {"expr": "github_repo_forks{repo='uprootiny/backstage-server-lab'}", "legendFormat": "forks", "refId": "B"},
+        {"expr": "github_repo_releases{repo='uprootiny/backstage-server-lab'}", "legendFormat": "releases", "refId": "C"}
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "GitHub API Rate Limit Remaining",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 12},
+      "targets": [{"expr": "github_api_rate_limit_remaining", "refId": "A"}]
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "style": "dark",
+  "tags": ["github", "repo", "observability"],
+  "templating": {"list": []},
+  "time": {"from": "now-7d", "to": "now"},
+  "timezone": "browser",
+  "title": "Backstage Repo Observability",
+  "uid": "backstage-repo-observability",
+  "version": 1
+}
