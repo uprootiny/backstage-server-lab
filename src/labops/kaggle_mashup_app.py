@@ -1017,6 +1017,40 @@ def render_registry_tab() -> None:
             }
         )
 
+    # --- Enhanced: Per-run detail cards ---
+    st.markdown("### Run Detail Cards")
+    if "run_id" in show.columns:
+        run_choice = st.selectbox("Select run for details", options=show["run_id"].astype(str).tolist()[::-1], key="reg_run_detail")
+        if run_choice:
+            run_row = show[show["run_id"].astype(str) == run_choice].head(1)
+            if not run_row.empty:
+                rd = run_row.iloc[0].to_dict()
+                rc1, rc2, rc3, rc4 = st.columns(4)
+                rc1.metric("TM-score", rd.get("tm_score", ""))
+                rc2.metric("lDDT", rd.get("lddt", ""))
+                rc3.metric("Mark", rd.get("mark", ""))
+                rc4.metric("Run ID", rd.get("run_id", ""))
+                # Result summary
+                if rd.get("result_summary"):
+                    st.info(rd["result_summary"])
+                # Techniques
+                techs = rd.get("techniques", [])
+                if isinstance(techs, list) and techs:
+                    st.caption("Techniques: " + ", ".join(str(t) for t in techs))
+                # Artifacts links
+                with st.expander("Run Artifacts", expanded=False):
+                    nb_ref = str(rd.get("notebook_ref", ""))
+                    if nb_ref:
+                        tb_filter = nb_ref.split("/")[-1] if "/" in nb_ref else nb_ref
+                        st.markdown(f"[TensorBoard (filtered)]({TENSORBOARD_URL}/#scalars&regexInput={tb_filter})")
+                    exec_info = _count_executed_notebooks()
+                    if exec_info["total"] > 0:
+                        st.markdown(f"**{exec_info['total']}** executed notebooks in `{exec_info['dir']}`")
+                    ckpts = _list_checkpoints()
+                    if ckpts:
+                        st.markdown(f"**{len(ckpts)}** checkpoint files")
+                        st.dataframe(pd.DataFrame(ckpts).head(5), use_container_width=True, height=120)
+
 
 def render_parallel_tab() -> None:
     st.subheader("Run Fabric")
@@ -2200,6 +2234,352 @@ def render_geometry_model_tab() -> None:
             st.warning(f"Failed to project smoke artifact: {e}")
 
 
+##############################################################################
+# --- Enhanced project card helpers: real artifact data ---
+##############################################################################
+
+EXECUTED_NB_DIR = Path("artifacts/kaggle_parallel/executed")
+CHECKPOINTS_DIR = Path("artifacts/checkpoints")
+DATASETS_DIR = Path("artifacts/datasets")
+
+
+def load_pipeline_runs() -> list[dict[str, Any]]:
+    """Load all rows from pipeline_runs.jsonl."""
+    return _load_records(PIPELINE_RUNS_PATH)
+
+
+def load_submission_registry() -> list[dict[str, Any]]:
+    """Load all rows from notebook_submission_registry.jsonl."""
+    return _load_records(REGISTRY_PATH)
+
+
+def _count_executed_notebooks() -> dict[str, Any]:
+    """Scan executed notebook dir and return counts + file list."""
+    nb_dir = EXECUTED_NB_DIR
+    if not nb_dir.exists():
+        return {"total": 0, "files": [], "dir": str(nb_dir)}
+    files = sorted(nb_dir.glob("*.ipynb"))
+    return {"total": len(files), "files": [str(f) for f in files], "dir": str(nb_dir)}
+
+
+def _list_checkpoints() -> list[dict[str, Any]]:
+    """List model checkpoints with sizes and dates."""
+    ckpt_dir = CHECKPOINTS_DIR
+    if not ckpt_dir.exists():
+        return []
+    rows: list[dict[str, Any]] = []
+    for f in sorted(ckpt_dir.rglob("*")):
+        if f.is_file():
+            try:
+                stat = f.stat()
+                size_mb = round(stat.st_size / (1024 * 1024), 2)
+                mtime = datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).isoformat().replace("+00:00", "Z")
+            except Exception:
+                size_mb = 0.0
+                mtime = ""
+            rows.append({"file": str(f.relative_to(ckpt_dir)), "size_mb": size_mb, "updated": mtime})
+    return rows
+
+
+def _list_dataset_files() -> list[dict[str, Any]]:
+    """List dataset files under artifacts/datasets/."""
+    ds_dir = DATASETS_DIR
+    if not ds_dir.exists():
+        return []
+    rows: list[dict[str, Any]] = []
+    for f in sorted(ds_dir.rglob("*")):
+        if f.is_file():
+            try:
+                size_mb = round(f.stat().st_size / (1024 * 1024), 2)
+            except Exception:
+                size_mb = 0.0
+            rows.append({"file": str(f.relative_to(ds_dir)), "size_mb": size_mb})
+    return rows
+
+
+def _list_log_files(max_files: int = 20) -> list[dict[str, Any]]:
+    """List log files with sizes."""
+    if not LOG_DIR.exists():
+        return []
+    rows: list[dict[str, Any]] = []
+    for f in sorted(LOG_DIR.glob("*.log"))[:max_files]:
+        try:
+            size_kb = round(f.stat().st_size / 1024, 1)
+        except Exception:
+            size_kb = 0.0
+        rows.append({"file": f.name, "path": str(f), "size_kb": size_kb})
+    return rows
+
+
+def _parse_metrics_from_registry(registry_rows: list[dict[str, Any]], notebook_ref: str) -> list[dict[str, Any]]:
+    """Extract run score rows for a specific notebook_ref from the submission registry."""
+    results: list[dict[str, Any]] = []
+    for row in registry_rows:
+        ref = str(row.get("notebook_ref", ""))
+        # Match on exact ref or partial containment
+        if ref and (ref == notebook_ref or notebook_ref in ref or ref in notebook_ref):
+            results.append({
+                "run_id": row.get("run_id", ""),
+                "mark": row.get("mark", ""),
+                "tm_score": row.get("tm_score", ""),
+                "lddt": row.get("lddt", ""),
+                "breadcrumb": row.get("breadcrumb", ""),
+                "result_summary": row.get("result_summary", ""),
+                "techniques": row.get("techniques", []),
+                "created_at": row.get("created_at", ""),
+            })
+    return results
+
+
+def _gpu_status_safe() -> str:
+    """Try to get GPU status from nvidia-smi. Returns text summary."""
+    try:
+        p = subprocess.run(
+            ["nvidia-smi", "--query-gpu=name,utilization.gpu,memory.used,memory.total,temperature.gpu",
+             "--format=csv,noheader,nounits"],
+            capture_output=True, text=True, timeout=10,
+        )
+        if p.returncode == 0 and p.stdout.strip():
+            return p.stdout.strip()
+        return "nvidia-smi unavailable or no GPU"
+    except Exception:
+        return "nvidia-smi not available"
+
+
+def _disk_usage_safe() -> dict[str, str]:
+    """Get disk usage for workspace."""
+    try:
+        p = subprocess.run(
+            ["df", "-h", "/workspace"],
+            capture_output=True, text=True, timeout=5,
+        )
+        if p.returncode == 0:
+            lines = p.stdout.strip().split("\n")
+            if len(lines) >= 2:
+                parts = lines[1].split()
+                if len(parts) >= 5:
+                    return {"total": parts[1], "used": parts[2], "avail": parts[3], "pct": parts[4]}
+        return {"total": "?", "used": "?", "avail": "?", "pct": "?"}
+    except Exception:
+        return {"total": "?", "used": "?", "avail": "?", "pct": "?"}
+
+
+def _service_probe(url: str, timeout: float = 3.0) -> str:
+    """Quick HTTP probe returning UP/DOWN."""
+    code = _http_code(url, timeout=timeout)
+    if code in (200, 301, 302, 401, 403):
+        return "UP"
+    return "DOWN"
+
+
+def render_infrastructure_sidebar() -> None:
+    """Render the Infrastructure Status panel in the sidebar."""
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("### Infrastructure Status")
+
+    # GPU status
+    with st.sidebar.expander("GPU", expanded=False):
+        gpu_text = _gpu_status_safe()
+        if "unavailable" in gpu_text or "not available" in gpu_text:
+            st.info(gpu_text)
+        else:
+            lines = gpu_text.split("\n")
+            for i, line in enumerate(lines):
+                parts = [p.strip() for p in line.split(",")]
+                if len(parts) >= 5:
+                    st.markdown(f"**GPU {i}**: {parts[0]}")
+                    c1, c2 = st.columns(2)
+                    c1.metric("Util %", parts[1])
+                    c2.metric("Temp C", parts[4])
+                    st.caption(f"VRAM: {parts[2]} / {parts[3]} MiB")
+                else:
+                    st.code(line, language="text")
+
+    # Service health
+    with st.sidebar.expander("Services", expanded=False):
+        services = [
+            ("TensorBoard", TENSORBOARD_URL),
+            ("Jupyter", JUPYTER_BASE_URL),
+        ]
+        for name, url in services:
+            status = _service_probe(url)
+            icon = "+" if status == "UP" else "-"
+            st.markdown(f"`[{icon}]` **{name}** {status}")
+
+    # Disk usage
+    with st.sidebar.expander("Disk", expanded=False):
+        disk = _disk_usage_safe()
+        st.markdown(f"**Used**: {disk['used']} / {disk['total']} ({disk['pct']})")
+        st.markdown(f"**Available**: {disk['avail']}")
+
+
+def render_project_card_enhanced(
+    item: dict[str, Any],
+    registry_rows: list[dict[str, Any]],
+    pipeline_rows: list[dict[str, Any]],
+    operator_events: pd.DataFrame,
+) -> None:
+    """Render a single enhanced project card with real run data, artifacts, and scores."""
+    ref = str(item.get("ref", ""))
+    title = str(item.get("title", ref))
+    kind = str(item.get("kind", ""))
+    domain = str(item.get("domain", ""))
+    url = str(item.get("url", ""))
+    data_shape = str(item.get("data_shape", ""))
+    target = str(item.get("target", ""))
+
+    kind_colors = {
+        "competition": "#d59a2a",
+        "notebook": "#7ed9a8",
+        "model": "#9a7be0",
+        "dataset": "#5fa4d6",
+    }
+    color = kind_colors.get(kind, "#98b7a7")
+
+    st.markdown(
+        f"""<div style="border:1px solid var(--lab-border, #284438); border-left: 4px solid {color};
+        background: linear-gradient(120deg, rgba(20,36,29,0.85), rgba(12,22,19,0.9));
+        border-radius: 8px; padding: 12px 16px; margin: 0 0 10px 0;">
+        <div style="font-size:11px; color:{color}; text-transform:uppercase; letter-spacing:.08em;">{kind} / {domain}</div>
+        <div style="font-size:18px; font-weight:600; margin:4px 0;">{title}</div>
+        <div style="font-size:12px; color:#98b7a7;">{data_shape} &rarr; {target}</div>
+        </div>""",
+        unsafe_allow_html=True,
+    )
+
+    if url:
+        st.markdown(f"[Open on Kaggle]({url})")
+
+    # -- Run Scores section --
+    scores = _parse_metrics_from_registry(registry_rows, ref)
+    if scores:
+        with st.expander(f"Run Scores ({len(scores)} runs)", expanded=True):
+            score_df = pd.DataFrame(scores)
+            display_cols = [c for c in ["run_id", "mark", "tm_score", "lddt", "breadcrumb", "created_at", "result_summary"] if c in score_df.columns]
+            st.dataframe(score_df[display_cols], use_container_width=True, height=min(200, 40 + 35 * len(scores)))
+            # Best scores
+            tm_vals = [float(s.get("tm_score", 0) or 0) for s in scores]
+            lddt_vals = [float(s.get("lddt", 0) or 0) for s in scores]
+            if tm_vals:
+                bc1, bc2, bc3 = st.columns(3)
+                bc1.metric("Best TM-score", f"{max(tm_vals):.3f}")
+                bc2.metric("Best lDDT", f"{max(lddt_vals):.3f}")
+                bc3.metric("Runs", len(scores))
+            # Techniques across runs
+            all_techs = set()
+            for s in scores:
+                t = s.get("techniques", [])
+                if isinstance(t, list):
+                    all_techs.update(t)
+            if all_techs:
+                st.caption("Techniques used: " + ", ".join(sorted(all_techs)))
+    else:
+        st.caption("No run scores found in submission registry for this ref.")
+
+    # -- Run History from pipeline_runs.jsonl --
+    ref_pipeline_rows = [r for r in pipeline_rows if ref in str(r.get("path", "")) or ref in str(r.get("run_id", ""))]
+    if ref_pipeline_rows:
+        with st.expander(f"Pipeline History ({len(ref_pipeline_rows)} entries)", expanded=False):
+            for pr in ref_pipeline_rows[-5:]:
+                st.json(pr)
+
+    # -- Operator events mentioning this ref --
+    if not operator_events.empty and "message" in operator_events.columns:
+        matching = operator_events[operator_events["message"].astype(str).str.contains(ref.split("/")[-1] if "/" in ref else ref, case=False, na=False)]
+        if not matching.empty:
+            with st.expander(f"Operator Events ({len(matching)})", expanded=False):
+                show_cols = [c for c in ["ts", "kind", "severity", "message"] if c in matching.columns]
+                st.dataframe(matching[show_cols].tail(10), use_container_width=True, height=min(200, 40 + 35 * len(matching)))
+
+    # -- Artifacts section --
+    with st.expander("Artifacts", expanded=False):
+        # Executed notebooks
+        exec_info = _count_executed_notebooks()
+        if exec_info["total"] > 0:
+            st.markdown(f"**Executed notebooks**: {exec_info['total']} in `{exec_info['dir']}`")
+            for nb_path in exec_info["files"][:8]:
+                nb_name = Path(nb_path).name
+                nb_link = _nb_url(nb_path)
+                st.markdown(f"- [{nb_name}]({nb_link})")
+        else:
+            st.caption(f"No executed notebooks in `{exec_info['dir']}`")
+
+        # Model checkpoints
+        ckpts = _list_checkpoints()
+        if ckpts:
+            st.markdown(f"**Checkpoints**: {len(ckpts)} files")
+            ckpt_df = pd.DataFrame(ckpts)
+            st.dataframe(ckpt_df, use_container_width=True, height=min(160, 40 + 35 * len(ckpts)))
+        else:
+            st.caption("No model checkpoints in `artifacts/checkpoints/`")
+
+        # Dataset files
+        ds_files = _list_dataset_files()
+        if ds_files:
+            st.markdown(f"**Dataset files**: {len(ds_files)}")
+            ds_df = pd.DataFrame(ds_files)
+            st.dataframe(ds_df.head(15), use_container_width=True, height=min(160, 40 + 35 * min(15, len(ds_files))))
+        else:
+            st.caption("No dataset files in `artifacts/datasets/`")
+
+        # Log tails
+        log_files = _list_log_files()
+        if log_files:
+            st.markdown(f"**Logs**: {len(log_files)} files")
+            for lf in log_files[:5]:
+                with st.expander(f"Log: {lf['file']} ({lf['size_kb']} KB)", expanded=False):
+                    st.code(_tail_text(lf["path"], max_bytes=4000), language="text")
+        else:
+            st.caption("No log files in `logs/`")
+
+        # TensorBoard link
+        tb_filter = ref.split("/")[-1] if "/" in ref else ref
+        tb_url = f"{TENSORBOARD_URL}/#scalars&regexInput={tb_filter}"
+        st.markdown(f"[Open TensorBoard (filtered)]({tb_url})")
+
+        # Jupyter link for notebook
+        for digest in (load_top_notebook_analysis().get("digests", []) or []):
+            if str(digest.get("ref", "")) == ref and str(digest.get("local_path", "")):
+                jup_link = _nb_url(str(digest["local_path"]))
+                st.markdown(f"[Open local notebook in Jupyter]({jup_link})")
+                break
+
+
+def render_enhanced_catalogue_tab() -> None:
+    """Render the Structured Catalogue tab with enhanced project cards."""
+    st.subheader("Structured Catalogue (Enhanced)")
+    cdf = load_catalogue()
+    if cdf.empty:
+        st.info("No structured catalogue found. Enable 'Refresh structured catalogue' then reload.")
+        return
+
+    # Load real data from artifacts
+    registry_rows = load_submission_registry()
+    pipeline_rows = load_pipeline_runs()
+    operator_events = load_events()
+
+    # Summary metrics
+    kinds = cdf["kind"].value_counts().to_dict() if "kind" in cdf.columns else {}
+    mc = st.columns(len(kinds) + 1)
+    mc[0].metric("Total items", len(cdf))
+    for i, (k, v) in enumerate(kinds.items()):
+        mc[i + 1].metric(k.title(), v)
+
+    # Filters
+    domains = sorted([d for d in cdf.get("domain", pd.Series(dtype=str)).dropna().unique().tolist() if d])
+    kind_list = sorted([k for k in cdf.get("kind", pd.Series(dtype=str)).dropna().unique().tolist() if k])
+    fc1, fc2 = st.columns(2)
+    selected_domains = fc1.multiselect("Filter domains", options=domains, default=domains, key="enh_cat_domains")
+    selected_kinds = fc2.multiselect("Filter types", options=kind_list, default=kind_list, key="enh_cat_kinds")
+    f = cdf[cdf["domain"].isin(selected_domains) & cdf["kind"].isin(selected_kinds)].copy()
+
+    # Render each item as an enhanced card
+    for _, item in f.iterrows():
+        row_dict = item.to_dict()
+        render_project_card_enhanced(row_dict, registry_rows, pipeline_rows, operator_events)
+        st.markdown("---")
+
+
 def main() -> None:
     st.set_page_config(page_title="RNA Folding Research Observatory", layout="wide")
     inject_theme()
@@ -2214,6 +2594,7 @@ def main() -> None:
         sort_by = st.selectbox("Sort by", ["kind", "score", "updated", "title"], index=1)
         ascending = st.checkbox("Ascending", value=False)
     context_rail()
+    render_infrastructure_sidebar()
 
     try:
         df = load_or_fetch(limit=limit, search=search, force_live=force_live)
@@ -2247,6 +2628,7 @@ def main() -> None:
             "Live Search",
             "Structured Catalogue",
             "Starter Notebook Library",
+            "Project Cards",
         ]
     )
 
@@ -2316,26 +2698,34 @@ def main() -> None:
             st.info("No structured catalogue found yet. Enable 'Refresh structured catalogue' then reload.")
         else:
             domains = sorted([d for d in cdf.get("domain", pd.Series(dtype=str)).dropna().unique().tolist() if d])
-            kinds = sorted([k for k in cdf.get("kind", pd.Series(dtype=str)).dropna().unique().tolist() if k])
+            kinds_cat = sorted([k for k in cdf.get("kind", pd.Series(dtype=str)).dropna().unique().tolist() if k])
             selected_domains = st.multiselect("Domains", options=domains, default=domains)
-            selected_kinds = st.multiselect("Item types", options=kinds, default=kinds)
-            f = cdf[cdf["domain"].isin(selected_domains) & cdf["kind"].isin(selected_kinds)].copy()
+            selected_kinds_cat = st.multiselect("Item types", options=kinds_cat, default=kinds_cat)
+            f = cdf[cdf["domain"].isin(selected_domains) & cdf["kind"].isin(selected_kinds_cat)].copy()
+            display_cols_cat = [c for c in ["kind", "title", "domain", "data_shape", "representation", "target", "validation_dropout", "url"] if c in f.columns]
             st.dataframe(
-                f[
-                    [
-                        "kind",
-                        "title",
-                        "domain",
-                        "data_shape",
-                        "representation",
-                        "target",
-                        "validation_dropout",
-                        "url",
-                    ]
-                ],
+                f[display_cols_cat],
                 use_container_width=True,
                 height=520,
             )
+            # Inline run data summary from submission registry
+            reg_rows = load_submission_registry()
+            if reg_rows:
+                st.markdown("### Run Data Summary (from submission registry)")
+                reg_df = pd.DataFrame(reg_rows)
+                summary_cols = [c for c in ["run_id", "notebook_ref", "mark", "tm_score", "lddt", "breadcrumb", "created_at"] if c in reg_df.columns]
+                st.dataframe(reg_df[summary_cols], use_container_width=True, height=280)
+                # Best scores per notebook
+                if "notebook_ref" in reg_df.columns and "tm_score" in reg_df.columns:
+                    reg_df["tm_score_f"] = pd.to_numeric(reg_df["tm_score"], errors="coerce")
+                    reg_df["lddt_f"] = pd.to_numeric(reg_df["lddt"], errors="coerce")
+                    best = reg_df.groupby("notebook_ref").agg(
+                        best_tm=("tm_score_f", "max"),
+                        best_lddt=("lddt_f", "max"),
+                        runs=("run_id", "count"),
+                    ).reset_index().sort_values("best_tm", ascending=False)
+                    st.markdown("### Leaderboard (best per notebook)")
+                    st.dataframe(best, use_container_width=True, height=220)
 
     with tabs[15]:
         starters = load_starter_index()
@@ -2352,6 +2742,9 @@ def main() -> None:
                 st.markdown(f"- Path: `{nb_path}`")
                 st.markdown(f"- Focus: `{focus}`")
                 st.markdown(f"- {desc}")
+
+    with tabs[16]:
+        render_enhanced_catalogue_tab()
 
     st.caption(f"Last refresh: {_fmt_utc()}")
 

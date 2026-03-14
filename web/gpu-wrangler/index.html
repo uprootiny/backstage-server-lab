@@ -1,0 +1,1075 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GPU Wrangler - ML Training Control Panel</title>
+<style>
+/* ============================================================
+   GPU WRANGLER - Skeuomorphic Control Panel
+   Dark industrial / brushed metal aesthetic
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Share+Tech+Mono&display=swap');
+
+:root {
+  --bg-deep:        #0a0c10;
+  --bg-panel:       #12151c;
+  --bg-inset:       #090b0f;
+  --bg-raised:      #1a1e28;
+  --border-steel:   #2a2e38;
+  --border-light:   #3a3e48;
+  --text-primary:   #c8ccd4;
+  --text-dim:       #6a7080;
+  --text-bright:    #e8ecf4;
+  --green:          #3dd68c;
+  --green-dim:      #1a6b42;
+  --green-glow:     rgba(61, 214, 140, 0.3);
+  --amber:          #e8a020;
+  --amber-dim:      #6b4a10;
+  --amber-glow:     rgba(232, 160, 32, 0.3);
+  --red:            #e05050;
+  --red-dim:        #6b2020;
+  --red-glow:       rgba(224, 80, 80, 0.3);
+  --blue:           #4a90d9;
+  --blue-glow:      rgba(74, 144, 217, 0.3);
+  --steel-grad:     linear-gradient(135deg, #2a2e38 0%, #1a1e28 50%, #22262f 100%);
+  --inset-shadow:   inset 0 2px 6px rgba(0,0,0,0.6), inset 0 0 1px rgba(0,0,0,0.8);
+  --raised-shadow:  0 2px 8px rgba(0,0,0,0.5), 0 1px 2px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.04);
+  --panel-shadow:   0 4px 20px rgba(0,0,0,0.6), 0 1px 3px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.03);
+  --mono:           'JetBrains Mono', 'Share Tech Mono', 'Courier New', monospace;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html {
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  font-family: var(--mono);
+  background: var(--bg-deep);
+  color: var(--text-primary);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* Subtle scanline overlay */
+body::after {
+  content: '';
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0,0,0,0.03) 2px,
+    rgba(0,0,0,0.03) 4px
+  );
+  pointer-events: none;
+  z-index: 9999;
+}
+
+/* ---- HEADER ---- */
+.header {
+  background: var(--steel-grad);
+  border-bottom: 1px solid var(--border-steel);
+  padding: 16px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.5);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.logo {
+  width: 36px; height: 36px;
+  background: radial-gradient(circle at 40% 40%, #3a3e48, #1a1e28);
+  border: 2px solid var(--border-light);
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: var(--raised-shadow), 0 0 8px rgba(61,214,140,0.15);
+  position: relative;
+}
+
+.logo::after {
+  content: '';
+  width: 12px; height: 12px;
+  background: var(--green);
+  border-radius: 50%;
+  box-shadow: 0 0 6px var(--green-glow), 0 0 12px var(--green-glow);
+  animation: pulse-led 2s ease-in-out infinite;
+}
+
+.header-title {
+  font-size: 1.3rem;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--text-bright);
+  text-shadow: 0 0 20px rgba(61,214,140,0.15);
+}
+
+.header-subtitle {
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  margin-top: 2px;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.clock {
+  font-size: 1.1rem;
+  color: var(--green);
+  font-weight: 500;
+  letter-spacing: 1px;
+  text-shadow: 0 0 8px var(--green-glow);
+}
+
+.connection-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.connection-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--red);
+  box-shadow: 0 0 4px var(--red-glow);
+  transition: all 0.3s;
+}
+
+.connection-dot.connected {
+  background: var(--green);
+  box-shadow: 0 0 4px var(--green-glow), 0 0 8px var(--green-glow);
+}
+
+/* ---- LAYOUT ---- */
+.dashboard {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  padding: 16px 24px 24px;
+  max-width: 1600px;
+  margin: 0 auto;
+}
+
+.full-width { grid-column: 1 / -1; }
+
+/* ---- PANEL (base component) ---- */
+.panel {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-steel);
+  border-radius: 6px;
+  box-shadow: var(--panel-shadow);
+  overflow: hidden;
+  position: relative;
+}
+
+.panel::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.06), transparent);
+}
+
+.panel-header {
+  background: var(--steel-grad);
+  border-bottom: 1px solid var(--border-steel);
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.panel-title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: var(--text-dim);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.panel-title .dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 4px var(--green-glow);
+  animation: pulse-led 3s ease-in-out infinite;
+}
+
+.panel-body {
+  padding: 16px;
+}
+
+/* ---- LED INDICATORS ---- */
+@keyframes pulse-led {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+@keyframes blink-led {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.2; }
+}
+
+.led {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  border: 1px solid rgba(0,0,0,0.3);
+  display: inline-block;
+  transition: all 0.3s;
+}
+
+.led-green {
+  background: var(--green);
+  box-shadow: 0 0 4px var(--green-glow), 0 0 8px var(--green-glow), inset 0 -1px 2px rgba(0,0,0,0.3);
+}
+
+.led-amber {
+  background: var(--amber);
+  box-shadow: 0 0 4px var(--amber-glow), 0 0 8px var(--amber-glow), inset 0 -1px 2px rgba(0,0,0,0.3);
+  animation: blink-led 1.5s ease-in-out infinite;
+}
+
+.led-red {
+  background: var(--red);
+  box-shadow: 0 0 4px var(--red-glow), 0 0 8px var(--red-glow), inset 0 -1px 2px rgba(0,0,0,0.3);
+}
+
+.led-off {
+  background: #1a1c20;
+  box-shadow: inset 0 1px 3px rgba(0,0,0,0.5);
+}
+
+/* ---- ANALOG METERS ---- */
+.meter-cluster {
+  display: flex;
+  gap: 24px;
+  justify-content: center;
+  flex-wrap: wrap;
+  padding: 12px 0;
+}
+
+.analog-meter {
+  width: 180px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.meter-face {
+  width: 170px;
+  height: 100px;
+  position: relative;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+
+.meter-face canvas {
+  width: 100%;
+  height: 100%;
+}
+
+.meter-label {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: var(--text-dim);
+  margin-top: 4px;
+}
+
+.meter-value {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--green);
+  text-shadow: 0 0 10px var(--green-glow);
+  margin-top: 2px;
+}
+
+.meter-value.warning { color: var(--amber); text-shadow: 0 0 10px var(--amber-glow); }
+.meter-value.danger  { color: var(--red);   text-shadow: 0 0 10px var(--red-glow); }
+
+/* ---- TOGGLE SWITCHES ---- */
+.toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+}
+
+.toggle-label {
+  font-size: 0.8rem;
+  color: var(--text-dim);
+  min-width: 100px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.toggle-switch {
+  width: 52px;
+  height: 26px;
+  background: var(--bg-inset);
+  border: 2px solid var(--border-steel);
+  border-radius: 13px;
+  cursor: pointer;
+  position: relative;
+  box-shadow: var(--inset-shadow);
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.toggle-switch::after {
+  content: '';
+  position: absolute;
+  top: 2px; left: 2px;
+  width: 18px; height: 18px;
+  background: linear-gradient(135deg, #4a4e58, #2a2e38);
+  border-radius: 50%;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.toggle-switch.on {
+  border-color: var(--green-dim);
+  background: rgba(61, 214, 140, 0.1);
+}
+
+.toggle-switch.on::after {
+  left: 28px;
+  background: linear-gradient(135deg, var(--green), #2aab6e);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.4), 0 0 8px var(--green-glow);
+}
+
+.toggle-switch:active::after {
+  width: 22px;
+}
+
+/* ---- SLIDERS ---- */
+.slider-group {
+  margin-bottom: 14px;
+}
+
+.slider-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.slider-name {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.slider-val {
+  font-size: 0.85rem;
+  color: var(--green);
+  font-weight: 600;
+  min-width: 60px;
+  text-align: right;
+}
+
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 8px;
+  background: var(--bg-inset);
+  border: 1px solid var(--border-steel);
+  border-radius: 4px;
+  outline: none;
+  box-shadow: var(--inset-shadow);
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #4a4e58, #2a2e38);
+  border: 2px solid var(--border-light);
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1);
+  transition: box-shadow 0.15s;
+}
+
+input[type="range"]::-webkit-slider-thumb:hover {
+  box-shadow: 0 2px 8px rgba(0,0,0,0.5), 0 0 8px var(--green-glow), inset 0 1px 0 rgba(255,255,255,0.1);
+}
+
+input[type="range"]::-webkit-slider-thumb:active {
+  background: linear-gradient(135deg, #5a5e68, #3a3e48);
+}
+
+input[type="range"]::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #4a4e58, #2a2e38);
+  border: 2px solid var(--border-light);
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+}
+
+/* ---- BUTTONS ---- */
+.btn {
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  padding: 10px 24px;
+  border: 2px solid var(--border-steel);
+  border-radius: 4px;
+  cursor: pointer;
+  position: relative;
+  transition: all 0.15s;
+  background: var(--steel-grad);
+  color: var(--text-primary);
+  box-shadow: var(--raised-shadow);
+}
+
+.btn:hover {
+  border-color: var(--border-light);
+  color: var(--text-bright);
+}
+
+.btn:active {
+  transform: translateY(1px);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.4), inset 0 1px 3px rgba(0,0,0,0.2);
+}
+
+.btn-launch {
+  background: linear-gradient(135deg, #1a4030, #0d2018);
+  border-color: var(--green-dim);
+  color: var(--green);
+}
+
+.btn-launch:hover {
+  border-color: var(--green);
+  box-shadow: var(--raised-shadow), 0 0 12px var(--green-glow);
+}
+
+.btn-stop {
+  background: linear-gradient(135deg, #401a1a, #200d0d);
+  border-color: var(--red-dim);
+  color: var(--red);
+}
+
+.btn-stop:hover {
+  border-color: var(--red);
+  box-shadow: var(--raised-shadow), 0 0 12px var(--red-glow);
+}
+
+/* Click ripple */
+.btn::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 2px;
+  opacity: 0;
+  background: radial-gradient(circle, rgba(255,255,255,0.15) 0%, transparent 70%);
+  transition: opacity 0.3s;
+}
+
+.btn.clicked::after {
+  opacity: 1;
+  animation: btn-flash 0.3s ease-out forwards;
+}
+
+@keyframes btn-flash {
+  0% { opacity: 0.8; }
+  100% { opacity: 0; }
+}
+
+/* ---- SERVICE STATUS CARDS ---- */
+.services-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.service-card {
+  background: var(--bg-inset);
+  border: 1px solid var(--border-steel);
+  border-radius: 4px;
+  padding: 14px;
+  box-shadow: var(--inset-shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.service-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.service-name {
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-bright);
+}
+
+.service-port {
+  font-size: 0.7rem;
+  color: var(--text-dim);
+}
+
+.service-status-text {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.service-status-text.up   { color: var(--green); }
+.service-status-text.down { color: var(--red); }
+
+/* ---- LOSS CHART ---- */
+.chart-container {
+  background: var(--bg-inset);
+  border: 1px solid var(--border-steel);
+  border-radius: 4px;
+  box-shadow: var(--inset-shadow);
+  padding: 8px;
+  position: relative;
+}
+
+.chart-container canvas {
+  width: 100%;
+  height: 200px;
+  display: block;
+}
+
+/* ---- RUN HISTORY TABLE ---- */
+.table-wrap {
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+
+thead th {
+  background: var(--steel-grad);
+  border-bottom: 1px solid var(--border-steel);
+  padding: 10px 12px;
+  text-align: left;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+  position: relative;
+}
+
+thead th:hover {
+  color: var(--text-primary);
+}
+
+thead th.sorted-asc::after  { content: ' \u25B2'; color: var(--green); }
+thead th.sorted-desc::after { content: ' \u25BC'; color: var(--green); }
+
+tbody tr {
+  border-bottom: 1px solid rgba(42, 46, 56, 0.5);
+  transition: background 0.15s;
+}
+
+tbody tr:hover {
+  background: rgba(61, 214, 140, 0.03);
+}
+
+tbody td {
+  padding: 8px 12px;
+  white-space: nowrap;
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 10px;
+  border-radius: 3px;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-weight: 600;
+}
+
+.status-badge.running  { background: rgba(61,214,140,0.1);  color: var(--green);  border: 1px solid var(--green-dim); }
+.status-badge.complete { background: rgba(74,144,217,0.1);  color: var(--blue);   border: 1px solid rgba(74,144,217,0.3); }
+.status-badge.failed   { background: rgba(224,80,80,0.1);   color: var(--red);    border: 1px solid var(--red-dim); }
+.status-badge.queued   { background: rgba(232,160,32,0.1);  color: var(--amber);  border: 1px solid var(--amber-dim); }
+
+/* ---- NOTEBOOK GALLERY ---- */
+.notebook-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.notebook-card {
+  background: var(--bg-inset);
+  border: 1px solid var(--border-steel);
+  border-radius: 4px;
+  padding: 14px;
+  box-shadow: var(--inset-shadow);
+  transition: border-color 0.2s, box-shadow 0.2s;
+  cursor: pointer;
+}
+
+.notebook-card:hover {
+  border-color: var(--border-light);
+  box-shadow: var(--inset-shadow), 0 0 8px rgba(74,144,217,0.1);
+}
+
+.notebook-icon {
+  font-size: 1.6rem;
+  margin-bottom: 8px;
+  filter: grayscale(0.3);
+}
+
+.notebook-name {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-bright);
+  margin-bottom: 4px;
+  word-break: break-all;
+}
+
+.notebook-meta {
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* ---- ACTIVE RUNS ---- */
+.active-run {
+  background: var(--bg-inset);
+  border: 1px solid var(--border-steel);
+  border-radius: 4px;
+  padding: 14px;
+  margin-bottom: 12px;
+  box-shadow: var(--inset-shadow);
+}
+
+.active-run-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.active-run-name {
+  font-weight: 600;
+  color: var(--text-bright);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.active-run-time {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+}
+
+.active-run-stats {
+  display: flex;
+  gap: 20px;
+  font-size: 0.8rem;
+  margin-top: 8px;
+}
+
+.stat-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.stat-label {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-dim);
+}
+
+.stat-value {
+  color: var(--green);
+  font-weight: 600;
+}
+
+/* ---- LAUNCH FORM ---- */
+.launch-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.launch-form .sliders-col {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.launch-form .action-col {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.launch-preset-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.preset-btn {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  padding: 5px 12px;
+  background: var(--bg-inset);
+  border: 1px solid var(--border-steel);
+  color: var(--text-dim);
+  border-radius: 3px;
+  cursor: pointer;
+  transition: all 0.15s;
+  box-shadow: var(--inset-shadow);
+}
+
+.preset-btn:hover {
+  border-color: var(--border-light);
+  color: var(--text-primary);
+}
+
+.preset-btn.active {
+  border-color: var(--green-dim);
+  color: var(--green);
+  background: rgba(61,214,140,0.05);
+}
+
+/* ---- SCROLLBAR ---- */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: var(--bg-inset); }
+::-webkit-scrollbar-thumb { background: var(--border-steel); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--border-light); }
+
+/* ---- RESPONSIVE ---- */
+@media (max-width: 900px) {
+  .dashboard { grid-template-columns: 1fr; }
+  .launch-form { grid-template-columns: 1fr; }
+  .meter-cluster { gap: 12px; }
+  .analog-meter { width: 140px; }
+}
+
+/* ---- UTIL ANIMATIONS ---- */
+@keyframes meter-sweep {
+  0% { transform: rotate(-135deg); }
+  100% { transform: rotate(var(--needle-angle)); }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.panel {
+  animation: fade-in 0.4s ease-out both;
+}
+
+.panel:nth-child(2) { animation-delay: 0.05s; }
+.panel:nth-child(3) { animation-delay: 0.10s; }
+.panel:nth-child(4) { animation-delay: 0.15s; }
+.panel:nth-child(5) { animation-delay: 0.20s; }
+.panel:nth-child(6) { animation-delay: 0.25s; }
+.panel:nth-child(7) { animation-delay: 0.30s; }
+
+/* ---- TOOLTIP ---- */
+.tooltip {
+  position: absolute;
+  background: var(--bg-raised);
+  border: 1px solid var(--border-light);
+  padding: 6px 10px;
+  border-radius: 3px;
+  font-size: 0.7rem;
+  color: var(--text-bright);
+  pointer-events: none;
+  z-index: 200;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+  white-space: nowrap;
+}
+
+/* ---- EMPTY STATE ---- */
+.empty-state {
+  text-align: center;
+  padding: 30px;
+  color: var(--text-dim);
+  font-size: 0.85rem;
+}
+
+.empty-state .icon {
+  font-size: 2rem;
+  margin-bottom: 10px;
+  opacity: 0.4;
+}
+</style>
+</head>
+<body>
+
+<!-- ============ HEADER ============ -->
+<header class="header">
+  <div class="header-left">
+    <div class="logo"></div>
+    <div>
+      <div class="header-title">GPU Wrangler</div>
+      <div class="header-subtitle">ML Training Control Panel</div>
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="connection-indicator">
+      <span class="connection-dot" id="connDot"></span>
+      <span id="connLabel">Offline</span>
+    </div>
+    <div class="clock" id="clock">--:--:--</div>
+  </div>
+</header>
+
+<!-- ============ DASHBOARD ============ -->
+<div class="dashboard">
+
+  <!-- GPU METERS -->
+  <div class="panel full-width" id="gpuPanel">
+    <div class="panel-header">
+      <div class="panel-title"><span class="dot"></span>GPU Status</div>
+      <span style="font-size:0.7rem; color:var(--text-dim);" id="gpuName">--</span>
+    </div>
+    <div class="panel-body">
+      <div class="meter-cluster" id="meterCluster">
+        <div class="analog-meter">
+          <div class="meter-face"><canvas id="meterUtil" width="340" height="200"></canvas></div>
+          <div class="meter-label">Utilization</div>
+          <div class="meter-value" id="valUtil">--%</div>
+        </div>
+        <div class="analog-meter">
+          <div class="meter-face"><canvas id="meterVram" width="340" height="200"></canvas></div>
+          <div class="meter-label">VRAM</div>
+          <div class="meter-value" id="valVram">-- / -- GB</div>
+        </div>
+        <div class="analog-meter">
+          <div class="meter-face"><canvas id="meterTemp" width="340" height="200"></canvas></div>
+          <div class="meter-label">Temperature</div>
+          <div class="meter-value" id="valTemp">--&deg;C</div>
+        </div>
+        <div class="analog-meter">
+          <div class="meter-face"><canvas id="meterPower" width="340" height="200"></canvas></div>
+          <div class="meter-label">Power Draw</div>
+          <div class="meter-value" id="valPower">-- W</div>
+        </div>
+        <div class="analog-meter">
+          <div class="meter-face"><canvas id="meterFan" width="340" height="200"></canvas></div>
+          <div class="meter-label">Fan Speed</div>
+          <div class="meter-value" id="valFan">--%</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ACTIVE TRAINING RUNS -->
+  <div class="panel">
+    <div class="panel-header">
+      <div class="panel-title"><span class="dot"></span>Active Runs</div>
+    </div>
+    <div class="panel-body" id="activeRunsBody">
+      <div class="empty-state"><div class="icon">&#9881;</div>No active training runs</div>
+    </div>
+  </div>
+
+  <!-- SERVICE STATUS -->
+  <div class="panel">
+    <div class="panel-header">
+      <div class="panel-title"><span class="dot"></span>Services</div>
+    </div>
+    <div class="panel-body">
+      <div class="services-grid" id="servicesGrid"></div>
+    </div>
+  </div>
+
+  <!-- LOSS CURVES -->
+  <div class="panel full-width">
+    <div class="panel-header">
+      <div class="panel-title"><span class="dot"></span>Loss Curves</div>
+      <div style="display:flex; gap:12px; font-size:0.7rem;">
+        <span style="color:var(--green);">&#9632; Train</span>
+        <span style="color:var(--amber);">&#9632; Validation</span>
+      </div>
+    </div>
+    <div class="panel-body">
+      <div class="chart-container">
+        <canvas id="lossCanvas" width="1200" height="400"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- LAUNCH RUN -->
+  <div class="panel full-width">
+    <div class="panel-header">
+      <div class="panel-title"><span class="dot"></span>Launch Training Run</div>
+    </div>
+    <div class="panel-body">
+      <div class="launch-preset-row">
+        <button class="preset-btn active" data-preset="default" onclick="applyPreset('default')">Default</button>
+        <button class="preset-btn" data-preset="quick" onclick="applyPreset('quick')">Quick Test</button>
+        <button class="preset-btn" data-preset="full" onclick="applyPreset('full')">Full Train</button>
+        <button class="preset-btn" data-preset="sweep" onclick="applyPreset('sweep')">Hyperparam Sweep</button>
+      </div>
+      <div class="launch-form">
+        <div class="sliders-col">
+          <div class="slider-group">
+            <div class="slider-header">
+              <span class="slider-name">gc_bias</span>
+              <span class="slider-val" id="val_gc_bias">0.50</span>
+            </div>
+            <input type="range" id="sl_gc_bias" min="0" max="1" step="0.01" value="0.5"
+                   oninput="updateSlider('gc_bias', this.value)">
+          </div>
+          <div class="slider-group">
+            <div class="slider-header">
+              <span class="slider-name">max_depth</span>
+              <span class="slider-val" id="val_max_depth">6</span>
+            </div>
+            <input type="range" id="sl_max_depth" min="1" max="20" step="1" value="6"
+                   oninput="updateSlider('max_depth', this.value)">
+          </div>
+          <div class="slider-group">
+            <div class="slider-header">
+              <span class="slider-name">wobble_p</span>
+              <span class="slider-val" id="val_wobble_p">0.10</span>
+            </div>
+            <input type="range" id="sl_wobble_p" min="0" max="0.5" step="0.01" value="0.1"
+                   oninput="updateSlider('wobble_p', this.value)">
+          </div>
+          <div class="slider-group">
+            <div class="slider-header">
+              <span class="slider-name">n_samples</span>
+              <span class="slider-val" id="val_n_samples">10000</span>
+            </div>
+            <input type="range" id="sl_n_samples" min="1000" max="100000" step="1000" value="10000"
+                   oninput="updateSlider('n_samples', this.value)">
+          </div>
+          <div class="slider-group">
+            <div class="slider-header">
+              <span class="slider-name">n_epochs</span>
+              <span class="slider-val" id="val_n_epochs">50</span>
+            </div>
+            <input type="range" id="sl_n_epochs" min="1" max="500" step="1" value="50"
+                   oninput="updateSlider('n_epochs', this.value)">
+          </div>
+        </div>
+        <div class="action-col">
+          <div>
+            <div class="toggle-row">
+              <span class="toggle-label">Mixed Precision</span>
+              <div class="toggle-switch on" id="tgl_fp16" onclick="toggleSwitch(this)"></div>
+            </div>
+            <div class="toggle-row">
+              <span class="toggle-label">Grad Checkpoint</span>
+              <div class="toggle-switch" id="tgl_grad_ckpt" onclick="toggleSwitch(this)"></div>
+            </div>
+            <div class="toggle-row">
+              <span class="toggle-label">Wandb Logging</span>
+              <div class="toggle-switch on" id="tgl_wandb" onclick="toggleSwitch(this)"></div>
+            </div>
+            <div class="toggle-row">
+              <span class="toggle-label">Auto-Save Best</span>
+              <div class="toggle-switch on" id="tgl_autosave" onclick="toggleSwitch(this)"></div>
+            </div>
+          </div>
+          <div style="display:flex; gap:12px; margin-top:16px;">
+            <button class="btn btn-launch" id="btnLaunch" onclick="launchRun()">Launch Run</button>
+            <button class="btn btn-stop" onclick="stopAllRuns()">Stop All</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RUN HISTORY -->
+  <div class="panel full-width">
+    <div class="panel-header">
+      <div class="panel-title"><span class="dot"></span>Run History</div>
+      <span style="font-size:0.7rem; color:var(--text-dim);" id="runCount">0 runs</span>
+    </div>
+    <div class="panel-body">
+      <div class="table-wrap">
+        <table id="historyTable">
+          <thead>
+            <tr>
+              <th data-col="id"    data-sort="asc">Run ID</th>
+              <th data-col="name">Name</th>
+              <th data-col="status">Status</th>
+              <th data-col="epochs">Epochs</th>
+              <th data-col="loss">Best Loss</th>
+              <th data-col="duration">Duration</th>
+              <th data-col="started">Started</th>
+            </tr>
+          </thead>
+          <tbody id="historyBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- NOTEBOOK GALLERY -->
+  <div class="panel full-width">
+    <div class="panel-header">
+      <div class="panel-title"><span class="dot"></span>Notebook Gallery</div>
+      <span style="font-size:0.7rem; color:var(--text-dim);" id="nbCount">0 notebooks</span>
+    </div>
+    <div class="panel-body">
+      <div class="notebook-grid" id="notebookGrid"></div>
+    </div>
+  </div>
+
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

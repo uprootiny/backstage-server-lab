@@ -276,22 +276,18 @@ def train(n_samples=512, n_epochs=50, batch_size=32, lr=3e-4,
             val_losses.append(val_loss)
 
             # TensorBoard logging
-            logger.log_epoch(epoch, train_loss, val_loss, {
+            logger.scalars({
+                "train/loss": train_loss,
+                "val/loss": val_loss,
                 "metrics/mae_pf": val_mae_pf,
                 "metrics/mae_nd": val_mae_nd,
                 "lr": optimizer.param_groups[0]["lr"],
-            })
+            }, step=epoch)
 
-            # Viz logging at intervals
+            # Histogram logging at intervals
             if epoch % 5 == 0 and records:
                 rec = records[epoch % len(records)]
-                logger.log_tda_histogram(epoch, rec.tda.feat)
-                logger.log_arc_diagram(epoch, rec.secondary.motif.sequence,
-                                       rec.secondary.bracket)
-                logger.log_persistence_barcode(epoch, rec.tda.dgm.H0, rec.tda.dgm.H1)
-                logger.log_dihedral_rose(epoch, rec.geometry.dihedrals)
-            if epoch % 10 == 0:
-                logger.log_training_overview(epoch, train_losses, val_losses)
+                logger.histogram("tda/features", rec.tda.feat, step=epoch)
 
             if epoch % 5 == 0 or epoch == 1:
                 print(f"{epoch:5d} {train_loss:11.5f} {val_loss:11.5f} {val_mae_pf:10.4f} {val_mae_nd:10.2f} {dt:5.1f}s")

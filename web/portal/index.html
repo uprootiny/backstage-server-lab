@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RNA 3D Lab — Mission Control</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#0a0c10;--bg2:#0f1218;--bg3:#151a22;
+  --jade:#3dd68c;--amber:#e8a020;--crimson:#e05050;
+  --azure:#50a8e0;--violet:#b060e0;--cream:#e8dfc8;
+  --dim:#2a2e35;--border:#1e2430;
+}
+body{background:var(--bg);color:var(--cream);font-family:'JetBrains Mono','Fira Code',monospace;font-size:13px;overflow-x:hidden}
+a{color:var(--azure);text-decoration:none}
+a:hover{color:var(--jade);text-decoration:underline}
+
+/* Header */
+.header{background:linear-gradient(180deg,#10141c,#0a0c10);border-bottom:1px solid var(--border);padding:12px 24px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
+.header h1{font-size:16px;color:var(--amber);font-weight:600;letter-spacing:1px}
+.header h1 span{color:var(--jade);font-size:11px;margin-left:8px;font-weight:400}
+.header-right{display:flex;gap:16px;align-items:center}
+.led{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:6px}
+.led-green{background:var(--jade);box-shadow:0 0 6px var(--jade)}
+.led-amber{background:var(--amber);box-shadow:0 0 6px var(--amber)}
+.led-red{background:var(--crimson);box-shadow:0 0 6px var(--crimson)}
+.led-off{background:#333;box-shadow:none}
+.gpu-bar{font-size:11px;color:var(--cream);opacity:0.8}
+.clock{font-size:11px;color:var(--dim);font-variant-numeric:tabular-nums}
+
+/* Main grid */
+.main{display:grid;grid-template-columns:280px 1fr;min-height:calc(100vh - 48px)}
+
+/* Sidebar */
+.sidebar{background:var(--bg2);border-right:1px solid var(--border);padding:16px;overflow-y:auto}
+.sidebar h3{font-size:11px;text-transform:uppercase;letter-spacing:2px;color:var(--amber);margin-bottom:12px}
+.nav-section{margin-bottom:20px}
+.nav-item{display:flex;align-items:center;padding:8px 10px;border-radius:6px;cursor:pointer;transition:all 0.15s;margin-bottom:2px}
+.nav-item:hover{background:var(--bg3)}
+.nav-item.active{background:var(--bg3);border-left:3px solid var(--jade)}
+.nav-item .icon{width:32px;height:32px;border-radius:6px;display:flex;align-items:center;justify-content:center;margin-right:10px;font-size:14px;flex-shrink:0}
+.nav-item .label{font-size:12px;color:var(--cream)}
+.nav-item .sublabel{font-size:10px;color:var(--dim);margin-top:2px}
+.icon-tb{background:linear-gradient(135deg,#1a2a1a,#0a1a0a);border:1px solid #2a4a2a}
+.icon-nb{background:linear-gradient(135deg,#2a1a2a,#1a0a1a);border:1px solid #4a2a4a}
+.icon-gpu{background:linear-gradient(135deg,#1a1a2a,#0a0a1a);border:1px solid #2a2a4a}
+.icon-st{background:linear-gradient(135deg,#2a2a1a,#1a1a0a);border:1px solid #4a4a2a}
+.icon-jp{background:linear-gradient(135deg,#1a2a2a,#0a1a1a);border:1px solid #2a4a4a}
+.icon-art{background:linear-gradient(135deg,#2a1a1a,#1a0a0a);border:1px solid #4a2a2a}
+
+/* Service status in sidebar */
+.svc-status{display:flex;align-items:center;gap:6px;font-size:10px;margin-top:4px}
+
+/* Content area */
+.content{padding:24px;overflow-y:auto}
+.content h2{font-size:18px;color:var(--amber);margin-bottom:16px;font-weight:600}
+
+/* Dashboard cards */
+.dash-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px;margin-bottom:24px}
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:16px;transition:all 0.2s}
+.card:hover{border-color:var(--dim);transform:translateY(-1px);box-shadow:0 4px 12px rgba(0,0,0,0.3)}
+.card h4{font-size:13px;color:var(--jade);margin-bottom:8px}
+.card .val{font-size:28px;font-weight:700;color:var(--cream);margin-bottom:4px}
+.card .sub{font-size:10px;color:var(--dim)}
+
+/* Iframe embed area */
+.embed-frame{width:100%;height:calc(100vh - 120px);border:1px solid var(--border);border-radius:8px;background:var(--bg3)}
+iframe{width:100%;height:100%;border:none;border-radius:8px}
+
+/* Render gallery */
+.gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(400px,1fr));gap:16px}
+.gallery img{width:100%;border-radius:6px;border:1px solid var(--border);cursor:pointer;transition:transform 0.2s}
+.gallery img:hover{transform:scale(1.02);border-color:var(--jade)}
+.gallery-item{position:relative}
+.gallery-label{position:absolute;bottom:8px;left:8px;background:rgba(10,12,16,0.85);padding:4px 8px;border-radius:4px;font-size:10px;color:var(--cream)}
+
+/* Run table */
+.run-table{width:100%;border-collapse:collapse;font-size:12px}
+.run-table th{text-align:left;padding:8px 12px;border-bottom:2px solid var(--border);color:var(--amber);font-size:11px;text-transform:uppercase;letter-spacing:1px}
+.run-table td{padding:8px 12px;border-bottom:1px solid var(--border)}
+.run-table tr:hover td{background:var(--bg3)}
+.badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600}
+.badge-ok{background:#1a3a2a;color:var(--jade)}
+.badge-fail{background:#3a1a1a;color:var(--crimson)}
+.badge-run{background:#3a3a1a;color:var(--amber)}
+
+/* Quick actions */
+.actions{display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap}
+.btn{padding:8px 16px;border-radius:6px;border:1px solid var(--border);background:var(--bg2);color:var(--cream);cursor:pointer;font-family:inherit;font-size:12px;transition:all 0.15s}
+.btn:hover{background:var(--bg3);border-color:var(--dim)}
+.btn-primary{border-color:var(--jade);color:var(--jade)}
+.btn-primary:hover{background:#0a2a1a}
+
+/* Footer status bar */
+.footer{position:fixed;bottom:0;left:0;right:0;background:var(--bg2);border-top:1px solid var(--border);padding:4px 24px;display:flex;justify-content:space-between;font-size:10px;color:var(--dim);z-index:100}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>RNA 3D LAB <span>Mission Control</span></h1>
+  <div class="header-right">
+    <span class="gpu-bar" id="gpu-bar">GPU: loading...</span>
+    <span class="clock" id="clock"></span>
+  </div>
+</div>
+
+<div class="main">
+  <div class="sidebar">
+    <div class="nav-section">
+      <h3>Surfaces</h3>
+      <div class="nav-item active" onclick="showPage('dashboard')">
+        <div class="icon icon-gpu">&#x1F4CA;</div>
+        <div><div class="label">Dashboard</div><div class="sublabel">Overview & metrics</div></div>
+      </div>
+      <div class="nav-item" onclick="showEmbed('http://localhost:6006','tensorboard')">
+        <div class="icon icon-tb">&#x1F4C8;</div>
+        <div><div class="label">TensorBoard</div>
+        <div class="svc-status"><span class="led led-off" id="led-tb"></span><span id="svc-tb">checking...</span></div></div>
+      </div>
+      <div class="nav-item" onclick="showEmbed('http://localhost:8520','gpu-wrangler')">
+        <div class="icon icon-gpu">&#x2699;</div>
+        <div><div class="label">GPU Wrangler</div>
+        <div class="svc-status"><span class="led led-off" id="led-gw"></span><span id="svc-gw">checking...</span></div></div>
+      </div>
+      <div class="nav-item" onclick="showEmbed('http://localhost:8521','notebook-lab')">
+        <div class="icon icon-nb">&#x1F4D3;</div>
+        <div><div class="label">Notebook Lab</div>
+        <div class="svc-status"><span class="led led-off" id="led-nb"></span><span id="svc-nb">checking...</span></div></div>
+      </div>
+      <div class="nav-item" onclick="showEmbed('http://localhost:1111','streamlit')">
+        <div class="icon icon-st">&#x1F52C;</div>
+        <div><div class="label">Research Mashup</div>
+        <div class="svc-status"><span class="led led-off" id="led-st"></span><span id="svc-st">checking...</span></div></div>
+      </div>
+      <div class="nav-item" onclick="showEmbed('http://localhost:8080','jupyter')">
+        <div class="icon icon-jp">&#x1F4BB;</div>
+        <div><div class="label">Jupyter Lab</div>
+        <div class="svc-status"><span class="led led-off" id="led-jp"></span><span id="svc-jp">checking...</span></div></div>
+      </div>
+    </div>
+    <div class="nav-section">
+      <h3>Views</h3>
+      <div class="nav-item" onclick="showPage('renders')">
+        <div class="icon icon-art">&#x1F3A8;</div>
+        <div><div class="label">Render Gallery</div><div class="sublabel">RNA visualizations</div></div>
+      </div>
+      <div class="nav-item" onclick="showPage('runs')">
+        <div class="icon icon-tb">&#x1F3C3;</div>
+        <div><div class="label">Run History</div><div class="sublabel">All training runs</div></div>
+      </div>
+      <div class="nav-item" onclick="showPage('notebooks')">
+        <div class="icon icon-nb">&#x1F4DA;</div>
+        <div><div class="label">Notebook Gallery</div><div class="sublabel">Executed notebooks</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="content" id="content">
+    <!-- Dashboard (default) -->
+    <div id="page-dashboard">
+      <h2>Dashboard</h2>
+      <div class="dash-grid" id="dash-cards"></div>
+      <h2 style="margin-top:24px">Recent Runs</h2>
+      <table class="run-table" id="run-table">
+        <thead><tr><th>Run</th><th>Status</th><th>Epochs</th><th>Best Val Loss</th><th>MAE pf</th></tr></thead>
+        <tbody id="run-tbody"></tbody>
+      </table>
+    </div>
+    <div id="page-embed" style="display:none">
+      <iframe id="embed-iframe" src="about:blank"></iframe>
+    </div>
+    <div id="page-renders" style="display:none">
+      <h2>RNA Visualization Gallery</h2>
+      <div class="gallery" id="render-gallery"></div>
+    </div>
+    <div id="page-runs" style="display:none">
+      <h2>All Training Runs</h2>
+      <div class="actions">
+        <button class="btn btn-primary" onclick="launchRun()">Launch New Run</button>
+        <button class="btn" onclick="refreshRuns()">Refresh</button>
+      </div>
+      <table class="run-table" id="all-runs-table">
+        <thead><tr><th>Run Name</th><th>Status</th><th>Events</th><th>Size</th><th>TensorBoard</th></tr></thead>
+        <tbody id="all-runs-tbody"></tbody>
+      </table>
+    </div>
+    <div id="page-notebooks" style="display:none">
+      <h2>Executed Notebooks</h2>
+      <div class="gallery" id="nb-gallery"></div>
+    </div>
+  </div>
+</div>
+
+<div class="footer">
+  <span id="footer-left">RNA 3D Lab v1.0 — backstage-server-lab</span>
+  <span id="footer-right">RTX 4080 SUPER 32GB</span>
+</div>
+
+<script>
+const PAGES = ['dashboard','embed','renders','runs','notebooks'];
+const SERVICES = [
+  {id:'tb', port:6006, name:'TensorBoard'},
+  {id:'gw', port:8520, name:'GPU Wrangler'},
+  {id:'nb', port:8521, name:'Notebook Lab'},
+  {id:'st', port:1111, name:'Streamlit'},
+  {id:'jp', port:8080, name:'Jupyter'},
+];
+
+const RENDERS = [
+  {file:'rna_showcase.png', label:'4-Panel Showcase'},
+  {file:'rna_gallery.png', label:'3D Structure Gallery'},
+  {file:'rna_arcs.png', label:'Arc Diagrams'},
+  {file:'rna_tda.png', label:'TDA Landscape'},
+  {file:'rna_landscape.png', label:'Folding Landscape'},
+  {file:'rna_contact_evolution.png', label:'Contact Evolution'},
+  {file:'rna_mountains.png', label:'Mountain Profiles'},
+  {file:'rna_structure_distance.png', label:'Structure Distance'},
+  {file:'rna_looptype_3d.png', label:'Loop-Type 3D'},
+];
+
+const TB_RUNS = [
+  {name:'gc0.40_d4_w0.08', status:'done', epochs:30, best_loss:0.044, mae_pf:0.042},
+  {name:'gc0.52_d5_w0.12', status:'done', epochs:30, best_loss:0.051, mae_pf:0.042},
+  {name:'gc0.65_d7_w0.15', status:'done', epochs:30, best_loss:0.068, mae_pf:0.047},
+];
+
+function showPage(page) {
+  PAGES.forEach(p => {
+    const el = document.getElementById('page-'+p);
+    if(el) el.style.display = p === page ? 'block' : 'none';
+  });
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  event?.target?.closest?.('.nav-item')?.classList.add('active');
+}
+
+function showEmbed(url, page) {
+  showPage('embed');
+  document.getElementById('embed-iframe').src = url;
+}
+
+function updateClock() {
+  const now = new Date();
+  document.getElementById('clock').textContent = now.toLocaleTimeString('en-GB');
+}
+
+function renderDashboard() {
+  const cards = [
+    {title:'GPU', val:'RTX 4080S', sub:'32GB VRAM · CUDA 12.8 · PyTorch 2.10'},
+    {title:'Training Runs', val: TB_RUNS.length + '+', sub:'TensorBoard sweep runs completed'},
+    {title:'Executed Notebooks', val:'23', sub:'kaggle_parallel batch + starters'},
+    {title:'Model Checkpoints', val:'2', sub:'egnn_best.pt · egnn_final.pt (1.8MB each)'},
+    {title:'Renders', val: RENDERS.length+'', sub:'phosphor-aesthetic RNA visualizations'},
+    {title:'Services', val: SERVICES.length+'', sub:'supervised with auto-restart'},
+  ];
+  document.getElementById('dash-cards').innerHTML = cards.map(c =>
+    `<div class="card"><h4>${c.title}</h4><div class="val">${c.val}</div><div class="sub">${c.sub}</div></div>`
+  ).join('');
+
+  document.getElementById('run-tbody').innerHTML = TB_RUNS.map(r =>
+    `<tr><td>${r.name}</td><td><span class="badge badge-ok">${r.status}</span></td><td>${r.epochs}</td><td>${r.best_loss.toFixed(4)}</td><td>${r.mae_pf.toFixed(4)}</td></tr>`
+  ).join('');
+}
+
+async function loadDynamicData() {
+  try {
+    // Load runs from API
+    const runsResp = await fetch('/api/runs');
+    const runsData = await runsResp.json();
+    if (runsData.tb_runs) {
+      TB_RUNS.length = 0;
+      runsData.tb_runs.forEach(r => TB_RUNS.push({
+        name: r.name, status: 'done', epochs: '-',
+        best_loss: '-', mae_pf: '-', size_kb: r.size_kb
+      }));
+    }
+    // Load renders from API
+    const rendersResp = await fetch('/api/renders');
+    const rendersData = await rendersResp.json();
+    if (rendersData.length) {
+      RENDERS.length = 0;
+      rendersData.forEach(r => RENDERS.push({file: r.file, label: r.name.replace('rna_','').replace(/_/g,' ')}));
+    }
+    // Load checkpoints
+    const ckResp = await fetch('/api/checkpoints');
+    const ckData = await ckResp.json();
+    // Load notebooks count
+    const nbResp = await fetch('/api/notebooks');
+    const nbData = await nbResp.json();
+    // Update dashboard
+    const cards = [
+      {title:'GPU', val:'RTX 4080S', sub:'32GB VRAM · CUDA 12.8 · PyTorch 2.10'},
+      {title:'Training Runs', val: TB_RUNS.length+'', sub:`${runsData.tb_runs?.length||0} TensorBoard + ${runsData.pipeline_runs?.length||0} pipeline runs`},
+      {title:'Notebooks', val: nbData.length+'', sub:'starters + kaggle + executed'},
+      {title:'Checkpoints', val: ckData.length+'', sub: ckData.map(c=>c.name).join(' · ') || 'none'},
+      {title:'Renders', val: RENDERS.length+'', sub:'phosphor-aesthetic RNA visualizations'},
+      {title:'Services', val: SERVICES.length+'', sub:'supervised with auto-restart'},
+    ];
+    document.getElementById('dash-cards').innerHTML = cards.map(c =>
+      `<div class="card"><h4>${c.title}</h4><div class="val">${c.val}</div><div class="sub">${c.sub}</div></div>`
+    ).join('');
+    // Notebook gallery
+    document.getElementById('nb-gallery').innerHTML = nbData.slice(0,20).map(n =>
+      `<div class="card"><h4>${n.name}</h4><div class="sub">${n.path} · ${n.size_kb}KB · ${n.modified?.slice(0,10)||''}</div></div>`
+    ).join('');
+    // All runs table
+    document.getElementById('all-runs-tbody').innerHTML = TB_RUNS.map(r =>
+      `<tr><td>${r.name}</td><td><span class="badge badge-ok">done</span></td><td>${r.size_kb||'-'}KB</td><td>-</td><td><a href="http://localhost:6006/#scalars&runFilter=${r.name}" target="_blank">open</a></td></tr>`
+    ).join('');
+    renderDashboard();
+  } catch(e) {
+    console.log('Dynamic load failed, using static data:', e);
+  }
+}
+
+function renderGallery() {
+  document.getElementById('render-gallery').innerHTML = RENDERS.map(r =>
+    `<div class="gallery-item"><img src="/artifacts/${r.file}" alt="${r.label}" onerror="this.style.display='none'"><div class="gallery-label">${r.label}</div></div>`
+  ).join('');
+}
+
+async function checkServices() {
+  for (const svc of SERVICES) {
+    const led = document.getElementById('led-'+svc.id);
+    const txt = document.getElementById('svc-'+svc.id);
+    try {
+      const r = await fetch('http://localhost:'+svc.port+'/', {mode:'no-cors',signal:AbortSignal.timeout(2000)});
+      led.className = 'led led-green';
+      txt.textContent = 'UP :'+svc.port;
+    } catch(e) {
+      led.className = 'led led-red';
+      txt.textContent = 'DOWN';
+    }
+  }
+}
+
+async function fetchGpuStatus() {
+  try {
+    const r = await fetch('http://localhost:8520/api/gpu-status');
+    const d = await r.json();
+    document.getElementById('gpu-bar').textContent =
+      `GPU: ${d.utilization||0}% · ${(d.vram_used||0).toFixed(1)}/${(d.vram_total||32).toFixed(0)}GB · ${d.temperature||0}°C`;
+  } catch(e) {
+    document.getElementById('gpu-bar').textContent = 'GPU: polling...';
+  }
+}
+
+function launchRun() {
+  showEmbed('http://localhost:8520', 'gpu-wrangler');
+}
+
+function refreshRuns() {
+  // Placeholder for dynamic run fetching
+  renderDashboard();
+}
+
+// Init
+renderDashboard();
+renderGallery();
+updateClock();
+loadDynamicData();
+setInterval(updateClock, 1000);
+setInterval(checkServices, 15000);
+setInterval(fetchGpuStatus, 10000);
+setTimeout(checkServices, 1000);
+setTimeout(fetchGpuStatus, 500);
+</script>
+</body>
+</html>
