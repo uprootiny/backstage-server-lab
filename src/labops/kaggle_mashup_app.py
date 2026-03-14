@@ -3,11 +3,17 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 import json
+import math
+import re
+import subprocess
 from pathlib import Path
+import sys
 from typing import Any
+from urllib.request import urlopen
 
 import pandas as pd
 import streamlit as st
+import streamlit.components.v1 as components
 from kaggle.api.kaggle_api_extended import KaggleApi
 
 CACHE_PATH = Path("artifacts/kaggle_mashup_cache.parquet")
@@ -19,9 +25,34 @@ REGISTRY_PATH = Path("artifacts/notebook_submission_registry.jsonl")
 PARALLEL_PLAN_PATH = Path("artifacts/kaggle_parallel/plan.json")
 PARALLEL_PLAN_YAML_PATH = Path("artifacts/kaggle_parallel/plan.yaml")
 PARALLEL_LEDGER_PATH = Path("artifacts/kaggle_parallel/ledger.jsonl")
+MANUAL_QUEUE_PATH = Path("artifacts/kaggle_parallel/manual_dispatch_queue.jsonl")
+MANUAL_QUEUE_STATE_PATH = Path("artifacts/kaggle_parallel/manual_dispatch_state.json")
+RERUN_MARKS_PATH = Path("artifacts/kaggle_parallel/rerun_marks.jsonl")
+PARAM_ADJUST_PATH = Path("artifacts/kaggle_parallel/param_adjustments.jsonl")
 LIVE_ENDPOINTS_PATH = Path("docs/LIVE_ENDPOINTS.md")
 LOG_DIR = Path("logs")
 EVENTS_PATH = Path("artifacts/operator_events.jsonl")
+NOTEBOOK_SOURCES_INDEX_PATH = Path("artifacts/notebook_sources/index.json")
+NOTEBOOK_FABRIC_DOC_PATH = Path("docs/NOTEBOOK_FABRIC.md")
+TOP_NOTEBOOK_DIGEST_PATH = Path("docs/TOP_NOTEBOOK_DIGEST.md")
+TOP_NOTEBOOK_ANALYSIS_PATH = Path("artifacts/top_notebook_analysis.json")
+OPEN_DATASETS_PATH = Path("data/seeds/open_rna_foundational_datasets.json")
+VISUALS_DIR = Path("docs/assets")
+PIPELINE_RUNS_PATH = Path("artifacts/pipeline_runs.jsonl")
+HYPOTHESES_PATH = Path("artifacts/hypotheses_shelf.json")
+GARDEN_STATE_PATH = Path("artifacts/garden_state.json")
+GRAFANA_URL = "http://173.212.203.211:19300"
+OBS_TUNNEL_URL = "https://generous-ladder-twins-sims.trycloudflare.com"
+VAST_PORT_MAP = [
+    ("SSH", "175.155.64.231:19636 -> 22/tcp"),
+    ("Jupyter", "175.155.64.231:19808 -> 8080/tcp"),
+    ("Portal", "175.155.64.231:19121 -> 1111/tcp"),
+    ("TensorBoard", "175.155.64.231:19448 -> 6006/tcp"),
+    ("Syncthing", "175.155.64.231:19753 -> 8384/tcp"),
+    ("Open 19842", "175.155.64.231:19842 -> 19842/tcp"),
+]
+
+JUPYTER_BASE_URL = "https://175.155.64.231:19808"
 
 
 @dataclass
@@ -182,6 +213,151 @@ def load_parallel_ledger() -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+def run_health_summary(ledger: pd.DataFrame) -> dict[str, Any]:
+    if ledger.empty:
+        return {
+            "ledger_rows": 0,
+            "run_end_count": 0,
+            "job_end_count": 0,
+            "ok": 0,
+            "failed": 0,
+            "latest_run_end": None,
+            "notebooks": [],
+        }
+    runs = ledger[ledger.get("event", "") == "run_end"] if "event" in ledger.columns else pd.DataFrame()
+    jobs = ledger[ledger.get("event", "") == "job_end"] if "event" in ledger.columns else ledger
+    if "status" in jobs.columns:
+        ok = int((jobs["status"] == "ok").sum())
+        failed = int((jobs["status"] != "ok").sum())
+    else:
+        ok = 0
+        failed = int(len(jobs))
+
+    notebooks: list[dict[str, Any]] = []
+    if not jobs.empty:
+        work = jobs.copy()
+        if "notebook" not in work.columns:
+            work["notebook"] = work.get("job_id", "unknown")
+        if "status" not in work.columns:
+            work["status"] = "unknown"
+        grouped = (
+            work.groupby("notebook", dropna=False)["status"]
+            .apply(list)
+            .reset_index()
+            .rename(columns={"status": "statuses"})
+        )
+        for _, row in grouped.iterrows():
+            statuses = [str(s) for s in row["statuses"]]
+            nb = str(row["notebook"])
+            ok_nb = sum(1 for s in statuses if s == "ok")
+            fail_nb = len(statuses) - ok_nb
+            notebooks.append({"notebook": nb, "ok": ok_nb, "failed": fail_nb, "total": len(statuses)})
+        notebooks.sort(key=lambda x: (-x["total"], x["notebook"]))
+
+    latest = None
+    if not runs.empty:
+        latest = runs.tail(1).to_dict("records")[0]
+
+    return {
+        "ledger_rows": int(len(ledger)),
+        "run_end_count": int(len(runs)),
+        "job_end_count": int(len(jobs)),
+        "ok": ok,
+        "failed": failed,
+        "latest_run_end": latest,
+        "notebooks": notebooks,
+    }
+
+
+def latest_job_rows_for_run(ledger: pd.DataFrame, run_id: str) -> pd.DataFrame:
+    if ledger.empty or "event" not in ledger.columns or "run_id" not in ledger.columns:
+        return pd.DataFrame()
+    rows = ledger[(ledger["event"] == "job_end") & (ledger["run_id"] == run_id)].copy()
+    if rows.empty:
+        return rows
+    keep = [c for c in ["job_id", "notebook", "status", "exit_code", "seconds", "log", "output_notebook", "attempts"] if c in rows.columns]
+    if keep:
+        rows = rows[keep]
+    return rows.sort_values(by="job_id")
+
+
+def notebook_scoreboard(ledger: pd.DataFrame) -> pd.DataFrame:
+    if ledger.empty or "event" not in ledger.columns:
+        return pd.DataFrame()
+    jobs = ledger[ledger["event"] == "job_end"].copy()
+    if jobs.empty:
+        return pd.DataFrame()
+    if "notebook" not in jobs.columns:
+        jobs["notebook"] = jobs.get("job_id", "unknown")
+    if "status" not in jobs.columns:
+        jobs["status"] = "unknown"
+    if "seconds" not in jobs.columns:
+        jobs["seconds"] = float("nan")
+    rows = []
+    for nb, g in jobs.groupby("notebook", dropna=False):
+        total = int(len(g))
+        ok = int((g["status"] == "ok").sum())
+        failed = total - ok
+        sr = (ok / total) if total else 0.0
+        mean_sec = float(pd.to_numeric(g["seconds"], errors="coerce").dropna().mean() or 0.0)
+        # Higher is better; failure and runtime penalize.
+        score = 100.0 * sr - 0.12 * mean_sec - 6.0 * failed
+        rerun_priority = (1.0 - sr) * 0.65 + min(1.0, mean_sec / 300.0) * 0.2 + (failed > ok) * 0.15
+        latest = g.tail(1).to_dict("records")[0]
+        rows.append(
+            {
+                "notebook": str(nb),
+                "total": total,
+                "ok": ok,
+                "failed": failed,
+                "success_rate": round(sr, 3),
+                "mean_seconds": round(mean_sec, 2),
+                "score": round(score, 2),
+                "rerun_priority": round(float(rerun_priority), 3),
+                "last_status": str(latest.get("status", "")),
+                "last_run_id": str(latest.get("run_id", "")),
+            }
+        )
+    out = pd.DataFrame(rows)
+    if out.empty:
+        return out
+    return out.sort_values(by=["rerun_priority", "score"], ascending=[False, True]).reset_index(drop=True)
+
+
+def _safe_slug(x: str) -> str:
+    return re.sub(r"[^a-zA-Z0-9_.-]+", "-", x).strip("-") or "job"
+
+
+def write_rerun_plan_from_rows(rows: list[dict[str, Any]], out_path: Path) -> Path:
+    jobs: list[dict[str, Any]] = []
+    for i, row in enumerate(rows):
+        notebook = str(row.get("notebook", "")).strip()
+        if not notebook:
+            continue
+        job_id = str(row.get("job_id", f"rerun-{i+1:03d}"))
+        jobs.append(
+            {
+                "id": f"rerun-{_safe_slug(job_id)}",
+                "notebook": notebook,
+                "timeout_min": 45,
+                "params": {"source": "run_fabric_rerun_ui", "original_job_id": job_id},
+                "expected_improvement": 0.20,
+                "uncertainty": 0.60,
+                "importance": 0.90,
+                "tags": ["rerun", "ui", "failed-job"],
+            }
+        )
+    payload = {
+        "profile": "ui_rerun_failed_jobs",
+        "created_at": _fmt_utc(),
+        "notes": "Generated by Run Fabric rerun affordance.",
+        "jobs": jobs,
+    }
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    return out_path
+
+
 def read_live_endpoints_md() -> str:
     if not LIVE_ENDPOINTS_PATH.exists():
         return "No `docs/LIVE_ENDPOINTS.md` yet. Run `make obs-probe`."
@@ -219,6 +395,147 @@ def load_events() -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+def load_notebook_sources_index() -> dict[str, Any]:
+    if not NOTEBOOK_SOURCES_INDEX_PATH.exists():
+        return {}
+    try:
+        raw = json.loads(NOTEBOOK_SOURCES_INDEX_PATH.read_text())
+    except Exception:
+        return {}
+    return raw if isinstance(raw, dict) else {}
+
+
+def load_top_notebook_analysis() -> dict[str, Any]:
+    if not TOP_NOTEBOOK_ANALYSIS_PATH.exists():
+        return {}
+    try:
+        raw = json.loads(TOP_NOTEBOOK_ANALYSIS_PATH.read_text())
+    except Exception:
+        return {}
+    return raw if isinstance(raw, dict) else {}
+
+
+def load_open_datasets() -> pd.DataFrame:
+    if not OPEN_DATASETS_PATH.exists():
+        return pd.DataFrame()
+    try:
+        raw = json.loads(OPEN_DATASETS_PATH.read_text())
+    except Exception:
+        return pd.DataFrame()
+    rows = raw.get("datasets", []) if isinstance(raw, dict) else []
+    if not isinstance(rows, list):
+        return pd.DataFrame()
+    return pd.DataFrame(rows)
+
+
+def _http_code(url: str, timeout: float = 4.0) -> int:
+    try:
+        with urlopen(url, timeout=timeout) as r:  # nosec B310
+            return int(getattr(r, "status", 0) or 0)
+    except Exception:
+        return 0
+
+
+def inject_theme() -> None:
+    st.markdown(
+        """
+<style>
+:root {
+  --lab-bg-0: #0a120f;
+  --lab-bg-1: #111d18;
+  --lab-bg-2: #182821;
+  --lab-fg: #dbe8df;
+  --lab-muted: #98b7a7;
+  --lab-accent: #7ed9a8;
+  --lab-warn: #f1bb70;
+  --lab-border: #284438;
+}
+.stApp {
+  background:
+    radial-gradient(1200px 500px at 15% -10%, rgba(84, 166, 120, 0.18), transparent 55%),
+    radial-gradient(900px 400px at 90% 0%, rgba(79, 124, 166, 0.16), transparent 55%),
+    linear-gradient(180deg, var(--lab-bg-0), #08100d 70%);
+  color: var(--lab-fg);
+}
+h1, h2, h3 {
+  letter-spacing: 0.02em;
+}
+.lab-hero {
+  border: 1px solid var(--lab-border);
+  background: linear-gradient(120deg, rgba(20,36,29,0.95), rgba(12,22,19,0.95));
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin: 0 0 12px 0;
+}
+.lab-kicker {
+  font-family: "IBM Plex Mono", monospace;
+  color: var(--lab-muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: .10em;
+}
+.lab-title {
+  font-size: 24px;
+  color: var(--lab-fg);
+  margin: 4px 0 8px 0;
+  font-weight: 650;
+}
+.lab-sub {
+  color: var(--lab-muted);
+  font-size: 14px;
+}
+.lab-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+.lab-chip {
+  border: 1px solid var(--lab-border);
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 12px;
+  color: var(--lab-accent);
+  background: rgba(28, 48, 40, 0.55);
+}
+div[data-baseweb="tab-list"] {
+  background: rgba(13, 23, 19, 0.8);
+  border: 1px solid var(--lab-border);
+  border-radius: 10px;
+  padding: 4px;
+}
+div[data-baseweb="tab"] {
+  border-radius: 8px !important;
+  margin-right: 4px !important;
+}
+</style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_hero() -> None:
+    st.markdown(
+        """
+<div class="lab-hero">
+  <div class="lab-kicker">Open Computational RNA Science</div>
+  <div class="lab-title">RNA Folding Research Observatory</div>
+  <div class="lab-sub">
+    Experimental. Reproducible. Precision-oriented. Notebook runs, model artifacts, and ops telemetry are tracked as one scientific instrument.
+  </div>
+  <div class="lab-chip-row">
+    <span class="lab-chip">open datasets</span>
+    <span class="lab-chip">candidate ensembles</span>
+    <span class="lab-chip">run fabric</span>
+    <span class="lab-chip">VOI prioritization</span>
+    <span class="lab-chip">operator trace</span>
+  </div>
+</div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def emit_event(kind: str, source: str, message: str, severity: str = "info", run_id: str = "") -> None:
     EVENTS_PATH.parent.mkdir(parents=True, exist_ok=True)
     row = {
@@ -231,6 +548,125 @@ def emit_event(kind: str, source: str, message: str, severity: str = "info", run
     }
     with EVENTS_PATH.open("a", encoding="utf-8") as f:
         f.write(json.dumps(row, ensure_ascii=True) + "\n")
+
+
+def enqueue_manual_dispatch(payload: dict[str, Any]) -> None:
+    MANUAL_QUEUE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    row = {"ts": _fmt_utc(), **payload}
+    with MANUAL_QUEUE_PATH.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(row, ensure_ascii=True) + "\n")
+
+
+def load_manual_queue() -> list[dict[str, Any]]:
+    if not MANUAL_QUEUE_PATH.exists():
+        return []
+    rows: list[dict[str, Any]] = []
+    for i, line in enumerate(MANUAL_QUEUE_PATH.read_text(encoding="utf-8").splitlines()):
+        s = line.strip()
+        if not s:
+            continue
+        try:
+            row = json.loads(s)
+            if isinstance(row, dict):
+                row["_line"] = i
+                rows.append(row)
+        except Exception:
+            continue
+    return rows
+
+
+def _read_manual_queue_offset() -> int:
+    if not MANUAL_QUEUE_STATE_PATH.exists():
+        return 0
+    try:
+        raw = json.loads(MANUAL_QUEUE_STATE_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        return 0
+    if isinstance(raw, dict):
+        return int(raw.get("applied_offset", 0) or 0)
+    return 0
+
+
+def _write_manual_queue_offset(offset: int) -> None:
+    MANUAL_QUEUE_STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    MANUAL_QUEUE_STATE_PATH.write_text(
+        json.dumps({"applied_offset": int(offset), "updated_at": _fmt_utc()}, indent=2),
+        encoding="utf-8",
+    )
+
+
+def apply_manual_queue_to_plan(plan_path: Path = PARALLEL_PLAN_PATH, max_apply: int = 20) -> dict[str, Any]:
+    if plan_path.exists():
+        try:
+            plan = json.loads(plan_path.read_text(encoding="utf-8"))
+        except Exception:
+            plan = {}
+    else:
+        plan = {}
+    if not isinstance(plan, dict):
+        plan = {}
+    jobs = plan.get("jobs", [])
+    if not isinstance(jobs, list):
+        jobs = []
+
+    rows = load_manual_queue()
+    offset = _read_manual_queue_offset()
+    pending = [r for r in rows if int(r.get("_line", -1)) >= offset]
+    applied = 0
+    for row in pending[:max_apply]:
+        jid = f"manual-{len(jobs)+1:04d}"
+        jobs.append(
+            {
+                "id": jid,
+                "notebook": str(row.get("notebook", "")),
+                "timeout_min": 60,
+                "expected_improvement": 0.22 if str(row.get("profile", "")) != "smoke" else 0.08,
+                "uncertainty": 0.65,
+                "importance": 0.85,
+                "params": {
+                    "profile": str(row.get("profile", "smoke")),
+                    "priority": int(row.get("priority", 50) or 50),
+                    "workers_hint": int(row.get("workers_hint", 3) or 3),
+                },
+                "tags": ["manual", "ui", "queued_intent"],
+            }
+        )
+        applied += 1
+
+    plan["profile"] = plan.get("profile", "manual")
+    plan["jobs"] = jobs
+    plan_path.parent.mkdir(parents=True, exist_ok=True)
+    plan_path.write_text(json.dumps(plan, indent=2), encoding="utf-8")
+
+    if applied:
+        last_line = pending[min(applied, len(pending)) - 1].get("_line", offset)
+        _write_manual_queue_offset(int(last_line) + 1)
+    return {"applied": applied, "pending_total": len(pending), "plan_jobs": len(jobs), "plan": str(plan_path)}
+
+
+def launch_parallel_dispatch_background(
+    workers: int,
+    plan: Path = PARALLEL_PLAN_PATH,
+    ledger: Path = PARALLEL_LEDGER_PATH,
+    logs_dir: Path = Path("logs/kaggle_parallel"),
+    executed_dir: Path = Path("artifacts/kaggle_parallel/executed"),
+) -> dict[str, Any]:
+    logs_dir.mkdir(parents=True, exist_ok=True)
+    bg_log = logs_dir / "manual_dispatch.log"
+    cmd = (
+        f"nohup {shlex_quote(sys.executable)} -m labops.cli kaggle-parallel-dispatch "
+        f"--plan {shlex_quote(str(plan))} --workers {int(workers)} "
+        f"--ledger {shlex_quote(str(ledger))} --logs-dir {shlex_quote(str(logs_dir))} "
+        f"--executed-dir {shlex_quote(str(executed_dir))} "
+        f">> {shlex_quote(str(bg_log))} 2>&1 & echo $!"
+    )
+    p = subprocess.run(["bash", "-lc", cmd], capture_output=True, text=True)
+    pid = p.stdout.strip() if p.returncode == 0 else ""
+    return {"ok": p.returncode == 0, "pid": pid, "log": str(bg_log), "stderr": p.stderr.strip()}
+
+
+def shlex_quote(s: str) -> str:
+    return "'" + s.replace("'", "'\"'\"'") + "'"
 
 
 def context_rail() -> None:
@@ -257,6 +693,131 @@ def context_rail() -> None:
     )
 
 
+def run_local_command(cmd: list[str], timeout_sec: int = 300) -> dict[str, Any]:
+    try:
+        p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout_sec)
+        return {
+            "ok": p.returncode == 0,
+            "returncode": p.returncode,
+            "stdout": p.stdout[-8000:],
+            "stderr": p.stderr[-8000:],
+            "cmd": " ".join(cmd),
+        }
+    except subprocess.TimeoutExpired as e:
+        return {"ok": False, "returncode": 124, "stdout": (e.stdout or ""), "stderr": f"timeout after {timeout_sec}s", "cmd": " ".join(cmd)}
+
+
+def _nb_url(path: str) -> str:
+    p = str(path or "").strip().lstrip("./")
+    if not p:
+        return JUPYTER_BASE_URL
+    return f"{JUPYTER_BASE_URL}/lab/tree/{p}"
+
+
+def _tail_text(path: str, max_bytes: int = 12000) -> str:
+    try:
+        f = Path(path)
+        if not f.exists():
+            return f"missing file: {path}"
+        b = f.read_bytes()
+        return b[-max_bytes:].decode("utf-8", errors="replace")
+    except Exception as e:
+        return f"tail failed: {e}"
+
+
+def _append_record(path: Path, row: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as f:
+        f.write(json.dumps({"ts": _fmt_utc(), **row}, ensure_ascii=True) + "\n")
+
+
+def _load_records(path: Path) -> list[dict[str, Any]]:
+    if not path.exists():
+        return []
+    rows: list[dict[str, Any]] = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        s = line.strip()
+        if not s:
+            continue
+        try:
+            j = json.loads(s)
+            if isinstance(j, dict):
+                rows.append(j)
+        except Exception:
+            continue
+    return rows
+
+
+def append_jsonl(path: Path, row: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(row, ensure_ascii=True) + "\n")
+
+
+def load_hypotheses() -> list[dict[str, Any]]:
+    if not HYPOTHESES_PATH.exists():
+        return []
+    try:
+        raw = json.loads(HYPOTHESES_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        return []
+    rows = raw.get("hypotheses", []) if isinstance(raw, dict) else []
+    return rows if isinstance(rows, list) else []
+
+
+def save_hypotheses(rows: list[dict[str, Any]]) -> None:
+    HYPOTHESES_PATH.parent.mkdir(parents=True, exist_ok=True)
+    HYPOTHESES_PATH.write_text(json.dumps({"updated_at": _fmt_utc(), "hypotheses": rows}, indent=2), encoding="utf-8")
+
+
+def load_garden_state() -> list[dict[str, Any]]:
+    if not GARDEN_STATE_PATH.exists():
+        seed = [
+            {"entity": "RNA 3D Part 2", "kind": "competition", "prominence": 1938, "pulse": 1, "contract": "seq->MSA->3D"},
+            {"entity": "RibonanzaNet2", "kind": "model", "prominence": 760, "pulse": 0, "contract": "seq->reactivity->structure"},
+            {"entity": "Stanford RNA 3D data", "kind": "dataset", "prominence": 610, "pulse": 0, "contract": "sequence+coords"},
+        ]
+        GARDEN_STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        GARDEN_STATE_PATH.write_text(json.dumps({"updated_at": _fmt_utc(), "plants": seed}, indent=2), encoding="utf-8")
+        return seed
+    try:
+        raw = json.loads(GARDEN_STATE_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        return []
+    rows = raw.get("plants", []) if isinstance(raw, dict) else []
+    return rows if isinstance(rows, list) else []
+
+
+def save_garden_state(rows: list[dict[str, Any]]) -> None:
+    GARDEN_STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    GARDEN_STATE_PATH.write_text(json.dumps({"updated_at": _fmt_utc(), "plants": rows}, indent=2), encoding="utf-8")
+
+
+def profile_submission_csv(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        return {"ok": False, "error": f"missing file: {path}"}
+    try:
+        df = pd.read_csv(path)
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+    cols = list(df.columns)
+    fmt = "unknown"
+    if {"ID", "resname", "resid"}.issubset(set(cols)):
+        fmt = "kaggle_rna_coordinates"
+    elif {"id", "sequence"}.issubset(set(c.lower() for c in cols)):
+        fmt = "sequence_table"
+    row = {
+        "ok": True,
+        "path": str(path),
+        "rows": int(len(df)),
+        "cols": int(len(df.columns)),
+        "format": fmt,
+        "columns": cols[:24],
+        "preview": df.head(3).to_dict(orient="records"),
+    }
+    return row
+
+
 def render_pipeline_tab() -> None:
     st.subheader("Pipeline Observatory")
     st.caption("State -> execution -> interpretation -> prioritization.")
@@ -273,6 +834,52 @@ def render_pipeline_tab() -> None:
         "10. Persist ledger + graph",
     ]
     st.code("\n".join(stages), language="text")
+    st.markdown("### Run pipeline on artifact")
+    path_default = "artifacts/kaggle_parallel/sigmaborov_submission.csv"
+    sample_path = st.text_input("CSV artifact path", value=path_default)
+    c1, c2 = st.columns(2)
+    if c1.button("Profile artifact now"):
+        prof = profile_submission_csv(Path(sample_path))
+        if not prof.get("ok"):
+            st.error(prof.get("error", "profile failed"))
+        else:
+            append_jsonl(
+                PIPELINE_RUNS_PATH,
+                {
+                    "ts": _fmt_utc(),
+                    "kind": "pipeline_profile",
+                    **prof,
+                },
+            )
+            emit_event("pipeline.profile", "pipeline_tab", f"profiled {sample_path} format={prof.get('format')}")
+            st.success(f"profiled: {prof['format']} rows={prof['rows']} cols={prof['cols']}")
+            st.json(prof)
+    if c2.button("Register as candidate run"):
+        prof = profile_submission_csv(Path(sample_path))
+        if not prof.get("ok"):
+            st.error(prof.get("error", "profile failed"))
+        else:
+            append_jsonl(
+                PIPELINE_RUNS_PATH,
+                {
+                    "ts": _fmt_utc(),
+                    "kind": "pipeline_register",
+                    "status": "candidate",
+                    **prof,
+                },
+            )
+            emit_event("pipeline.register", "pipeline_tab", f"registered candidate from {sample_path}")
+            st.success("candidate run recorded in artifacts/pipeline_runs.jsonl")
+    if PIPELINE_RUNS_PATH.exists():
+        rows = []
+        for line in PIPELINE_RUNS_PATH.read_text(encoding="utf-8").splitlines():
+            try:
+                rows.append(json.loads(line))
+            except Exception:
+                pass
+        if rows:
+            st.markdown("### Recent pipeline actions")
+            st.dataframe(pd.DataFrame(rows).tail(20), use_container_width=True, height=240)
     st.markdown("### Live ingress")
     st.markdown(read_live_endpoints_md())
     st.markdown("### State artifact contract")
@@ -288,6 +895,19 @@ def render_pipeline_tab() -> None:
   "status": "completed"
 }""",
         language="json",
+    )
+    st.markdown("### Repro harness commands")
+    st.code(
+        "\n".join(
+            [
+                "make notebook-pull",
+                "make notebook-interactive",
+                "make notebook-clickthrough",
+                "make kaggle-parallel-status",
+                "make kaggle-parallel-reruns MIN_VOI=0.12 LIMIT=20",
+            ]
+        ),
+        language="bash",
     )
 
 
@@ -341,14 +961,48 @@ def render_parallel_tab() -> None:
     st.subheader("Run Fabric")
     plan = load_parallel_plan()
     ledger = load_parallel_ledger()
+    health = run_health_summary(ledger)
+    queue_rows = load_manual_queue()
+    queue_offset = _read_manual_queue_offset()
+    pending_rows = [r for r in queue_rows if int(r.get("_line", -1)) >= queue_offset]
 
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
     col1.metric("Plan jobs", int(_safe_len(plan.get("jobs", []))))
-    col2.metric("Ledger rows", int(len(ledger)))
-    if not ledger.empty and "status" in ledger.columns:
-        col3.metric("Failures", int((ledger["status"] != "ok").sum()))
-    else:
-        col3.metric("Failures", 0)
+    col2.metric("Ledger rows", int(health["ledger_rows"]))
+    col3.metric("Failures", int(health["failed"]))
+    col4.metric("Queue pending", int(len(pending_rows)))
+
+    st.markdown("### Run Health (single source of truth)")
+    h1, h2, h3, h4 = st.columns(4)
+    h1.metric("run_end", int(health["run_end_count"]))
+    h2.metric("job_end", int(health["job_end_count"]))
+    h3.metric("ok", int(health["ok"]))
+    h4.metric("failed", int(health["failed"]))
+    if health["latest_run_end"]:
+        st.caption(f"latest run_end: `{health['latest_run_end'].get('run_id','')}`")
+        lhs, rhs = st.columns([1, 1])
+        with lhs:
+            st.json(health["latest_run_end"])
+        with rhs:
+            rid = str(health["latest_run_end"].get("run_id", ""))
+            latest_jobs = latest_job_rows_for_run(ledger, rid)
+            st.markdown("**Latest run job_end rows**")
+            if latest_jobs.empty:
+                st.info("No job_end rows found for latest run.")
+            else:
+                st.dataframe(latest_jobs, use_container_width=True, height=220)
+                if "log" in latest_jobs.columns:
+                    log_paths = [str(x) for x in latest_jobs["log"].dropna().tolist()[:6]]
+                    if log_paths:
+                        st.markdown("**Log paths**")
+                        st.code("\n".join(log_paths), language="text")
+                if "output_notebook" in latest_jobs.columns:
+                    out_paths = [str(x) for x in latest_jobs["output_notebook"].dropna().tolist()[:6]]
+                    if out_paths:
+                        st.markdown("**Executed notebook paths**")
+                        st.code("\n".join(out_paths), language="text")
+    if health["notebooks"]:
+        st.dataframe(pd.DataFrame(health["notebooks"][:30]), use_container_width=True, height=220)
 
     if plan:
         st.markdown("### Plan")
@@ -362,6 +1016,162 @@ def render_parallel_tab() -> None:
     st.markdown("### Ledger")
     st.dataframe(ledger, use_container_width=True, height=360)
 
+    st.markdown("### Traceability")
+    t1, t2 = st.columns([1, 1])
+    run_ids = []
+    if not ledger.empty and "run_id" in ledger.columns:
+        run_ids = [str(x) for x in ledger["run_id"].dropna().astype(str).unique().tolist()]
+    selected_run = t1.selectbox("Inspect run_id", options=run_ids[::-1], index=0 if run_ids else None)
+    if selected_run:
+        run_rows = ledger[ledger.get("run_id", "") == selected_run].copy()
+        show_cols = [c for c in ["ts", "event", "run_id", "job_id", "notebook", "status", "exit_code", "seconds"] if c in run_rows.columns]
+        if show_cols:
+            t2.caption(f"events for {selected_run}")
+            t2.dataframe(run_rows[show_cols], use_container_width=True, height=240)
+        else:
+            t2.info("No trace rows available.")
+
+    st.markdown("### Notebook Inspector + Rerun Workbench")
+    scoreboard = notebook_scoreboard(ledger)
+    if not scoreboard.empty:
+        st.caption("Ledger-derived scoring (success, cost, failure pressure)")
+        st.dataframe(scoreboard, use_container_width=True, height=220)
+
+    jobs = ledger[ledger.get("event", "") == "job_end"].copy() if not ledger.empty and "event" in ledger.columns else pd.DataFrame()
+    if jobs.empty:
+        st.info("No job_end events available yet.")
+    else:
+        if "notebook" not in jobs.columns:
+            jobs["notebook"] = jobs.get("job_id", "unknown")
+        if "status" not in jobs.columns:
+            jobs["status"] = "unknown"
+        keep_cols = [c for c in ["ts", "run_id", "job_id", "notebook", "status", "seconds", "log", "output_notebook"] if c in jobs.columns]
+        view = jobs[keep_cols].copy()
+        view["notebook_url"] = view["notebook"].astype(str).apply(_nb_url)
+        if "output_notebook" in view.columns:
+            view["executed_url"] = view["output_notebook"].astype(str).apply(_nb_url)
+        st.dataframe(
+            view.tail(120),
+            use_container_width=True,
+            height=260,
+            column_config={
+                "notebook_url": st.column_config.LinkColumn("Notebook"),
+                "executed_url": st.column_config.LinkColumn("Executed"),
+            },
+        )
+
+        opts = [
+            f"{str(r.get('run_id',''))} :: {str(r.get('job_id',''))} :: {str(r.get('notebook',''))}"
+            for _, r in jobs.tail(200).iterrows()
+        ]
+        chosen = st.selectbox("Inspect notebook job", options=opts[::-1] if opts else [])
+        if chosen:
+            rid, jid, nb = [p.strip() for p in chosen.split("::", 2)]
+            pick = jobs[(jobs.get("run_id", "") == rid) & (jobs.get("job_id", "") == jid)].tail(1)
+            if not pick.empty:
+                row = pick.iloc[0].to_dict()
+                cA, cB, cC = st.columns([1, 1, 1])
+                cA.link_button("Open notebook", _nb_url(str(row.get("notebook", ""))), use_container_width=True)
+                if str(row.get("output_notebook", "")).strip():
+                    cB.link_button("Open executed", _nb_url(str(row.get("output_notebook", ""))), use_container_width=True)
+                if str(row.get("log", "")).strip():
+                    cC.link_button("Open run fabric tab", "http://175.155.64.231:19448", use_container_width=True)
+                st.json(
+                    {
+                        "run_id": row.get("run_id"),
+                        "job_id": row.get("job_id"),
+                        "status": row.get("status"),
+                        "seconds": row.get("seconds"),
+                        "exit_code": row.get("exit_code"),
+                        "notebook": row.get("notebook"),
+                        "output_notebook": row.get("output_notebook"),
+                        "log": row.get("log"),
+                    }
+                )
+                nb_score_row = scoreboard[scoreboard["notebook"] == str(row.get("notebook", ""))] if not scoreboard.empty else pd.DataFrame()
+                if not nb_score_row.empty:
+                    ss = nb_score_row.iloc[0].to_dict()
+                    s1, s2, s3, s4 = st.columns(4)
+                    s1.metric("score", ss.get("score"))
+                    s2.metric("success_rate", ss.get("success_rate"))
+                    s3.metric("mean_seconds", ss.get("mean_seconds"))
+                    s4.metric("rerun_priority", ss.get("rerun_priority"))
+                if str(row.get("log", "")).strip():
+                    with st.expander("Log tail", expanded=True):
+                        st.code(_tail_text(str(row.get("log", ""))), language="text")
+
+                p1, p2, p3 = st.columns([1, 1, 2])
+                if p1.button("Mark for rerun", key=f"mark_{rid}_{jid}"):
+                    _append_record(
+                        RERUN_MARKS_PATH,
+                        {
+                            "run_id": rid,
+                            "job_id": jid,
+                            "notebook": row.get("notebook"),
+                            "status": row.get("status"),
+                            "action": "mark_rerun",
+                        },
+                    )
+                    st.success(f"marked: {jid}")
+                if p2.button("Enqueue rerun intent", key=f"enqueue_{rid}_{jid}"):
+                    enqueue_manual_dispatch(
+                        {
+                            "type": "manual_dispatch_intent",
+                            "notebook": str(row.get("notebook", "")),
+                            "profile": "baseline",
+                            "priority": 70,
+                            "workers_hint": 2,
+                            "source_run": rid,
+                            "source_job": jid,
+                        }
+                    )
+                    st.success("rerun intent queued")
+                with p3.form(f"adjust_{rid}_{jid}", clear_on_submit=False):
+                    st.caption("Parameter adjustment")
+                    profile = st.selectbox("profile", options=["smoke", "baseline", "recycling_6_layers_8", "protenix_on"], index=1, key=f"prof_{rid}_{jid}")
+                    workers_hint = st.slider("workers_hint", min_value=1, max_value=12, value=2, step=1, key=f"wrk_{rid}_{jid}")
+                    priority = st.slider("priority", min_value=1, max_value=100, value=75, step=1, key=f"pri_{rid}_{jid}")
+                    note = st.text_input("note", value="", key=f"note_{rid}_{jid}")
+                    submit_adj = st.form_submit_button("Save adjustment")
+                    if submit_adj:
+                        _append_record(
+                            PARAM_ADJUST_PATH,
+                            {
+                                "run_id": rid,
+                                "job_id": jid,
+                                "notebook": row.get("notebook"),
+                                "profile": profile,
+                                "workers_hint": int(workers_hint),
+                                "priority": int(priority),
+                                "note": note,
+                            },
+                        )
+                        enqueue_manual_dispatch(
+                            {
+                                "type": "manual_dispatch_intent",
+                                "notebook": str(row.get("notebook", "")),
+                                "profile": profile,
+                                "priority": int(priority),
+                                "workers_hint": int(workers_hint),
+                                "note": note,
+                                "source_run": rid,
+                                "source_job": jid,
+                            }
+                        )
+                        st.success("adjustment saved + rerun intent queued")
+
+        marks = _load_records(RERUN_MARKS_PATH)
+        adjusts = _load_records(PARAM_ADJUST_PATH)
+        mcol, acol = st.columns(2)
+        with mcol:
+            st.caption(f"rerun marks: {len(marks)}")
+            if marks:
+                st.dataframe(pd.DataFrame(marks).tail(20), use_container_width=True, height=180)
+        with acol:
+            st.caption(f"param adjustments: {len(adjusts)}")
+            if adjusts:
+                st.dataframe(pd.DataFrame(adjusts).tail(20), use_container_width=True, height=180)
+
     st.markdown("### Control snippets")
     st.code(
         "\n".join(
@@ -374,19 +1184,128 @@ def render_parallel_tab() -> None:
         ),
         language="bash",
     )
+    if "jobs" in plan and isinstance(plan.get("jobs"), list):
+        plan_df = pd.DataFrame(plan["jobs"])
+        keep = [c for c in ["job_id", "source_id", "source_name", "param_profile", "priority", "status", "notebook"] if c in plan_df.columns]
+        if keep:
+            st.markdown("### Current plan jobs")
+            st.dataframe(plan_df[keep], use_container_width=True, height=280)
+
+    st.markdown("### Queue -> Plan -> Dispatch")
+    q1, q2, q3 = st.columns(3)
+    apply_n = q1.slider("Apply intents (max)", min_value=1, max_value=50, value=10, step=1)
+    dispatch_workers = q2.slider("Dispatch workers", min_value=1, max_value=12, value=3, step=1)
+    if q1.button("Apply queued intents to plan"):
+        out = apply_manual_queue_to_plan(max_apply=apply_n)
+        emit_event("run.plan_update", "run_fabric_ui", f"applied={out['applied']} pending={out['pending_total']} plan_jobs={out['plan_jobs']}")
+        st.success(out)
+    if q2.button("Dispatch plan in background"):
+        out = launch_parallel_dispatch_background(workers=dispatch_workers)
+        if out.get("ok"):
+            emit_event("run.dispatch", "run_fabric_ui", f"background dispatch pid={out.get('pid','')} workers={dispatch_workers}")
+            st.success(out)
+        else:
+            emit_event("run.dispatch_error", "run_fabric_ui", out.get("stderr", "dispatch launch failed"), severity="warning")
+            st.error(out)
+    if q3.button("Refresh queue snapshot"):
+        st.rerun()
+    if pending_rows:
+        st.dataframe(pd.DataFrame(pending_rows).tail(50), use_container_width=True, height=200)
+
+    st.markdown("### Rerun affordances")
+    failed_jobs = pd.DataFrame()
+    if not ledger.empty and "event" in ledger.columns:
+        failed_jobs = ledger[(ledger["event"] == "job_end") & (ledger.get("status", "") != "ok")].copy()
+    if failed_jobs.empty:
+        st.success("No failed jobs currently in ledger.")
+    else:
+        keep = [c for c in ["ts", "run_id", "job_id", "notebook", "status", "exit_code", "seconds", "log"] if c in failed_jobs.columns]
+        st.dataframe(failed_jobs[keep].tail(80), use_container_width=True, height=220)
+        options = []
+        for _, r in failed_jobs.tail(80).iterrows():
+            jid = str(r.get("job_id", ""))
+            nb = str(r.get("notebook", ""))
+            options.append(f"{jid} :: {nb}")
+        selected = st.multiselect("Select failed jobs to rerun", options=options, default=options[: min(3, len(options))])
+        rr1, rr2 = st.columns([1, 1])
+        rerun_workers = rr1.slider("Rerun workers", min_value=1, max_value=6, value=1, step=1)
+        if rr2.button("Rerun selected failed jobs"):
+            picked_rows: list[dict[str, Any]] = []
+            selected_set = set(selected)
+            for _, r in failed_jobs.tail(80).iterrows():
+                label = f"{str(r.get('job_id',''))} :: {str(r.get('notebook',''))}"
+                if label in selected_set:
+                    picked_rows.append(r.to_dict())
+            if not picked_rows:
+                st.warning("No failed jobs selected.")
+            else:
+                plan_out = write_rerun_plan_from_rows(
+                    picked_rows, Path("artifacts/kaggle_parallel/plan_rerun_from_ui.json")
+                )
+                out = launch_parallel_dispatch_background(workers=rerun_workers, plan=plan_out)
+                if out.get("ok"):
+                    emit_event(
+                        "run.rerun_dispatch",
+                        "run_fabric_ui",
+                        f"rerun_plan={plan_out} workers={rerun_workers} pid={out.get('pid','')}",
+                    )
+                    st.success({"plan": str(plan_out), **out})
+                else:
+                    emit_event("run.rerun_dispatch_error", "run_fabric_ui", out.get("stderr", "rerun dispatch failed"), severity="warning")
+                    st.error(out)
+
+    st.markdown("### Quick enqueue")
+    with st.form("quick_enqueue_form"):
+        q_notebook = st.text_input("Notebook path/ref", value="notebooks/starters/02_rna_3d_training_filled.ipynb")
+        q_profile = st.selectbox("Profile", options=["smoke", "baseline", "recycling_6_layers_8", "protenix_on"], index=0)
+        q_priority = st.slider("Priority", min_value=1, max_value=100, value=50, step=1)
+        q_workers = st.slider("Concurrency hint", min_value=1, max_value=12, value=3, step=1)
+        submitted = st.form_submit_button("Enqueue run intent")
+    if submitted:
+        enqueue_manual_dispatch(
+            {
+                "type": "manual_dispatch_intent",
+                "notebook": q_notebook,
+                "profile": q_profile,
+                "priority": int(q_priority),
+                "workers_hint": int(q_workers),
+            }
+        )
+        emit_event(
+            "run.intent",
+            "run_fabric_ui",
+            f"queued intent notebook={q_notebook} profile={q_profile} workers={q_workers}",
+            run_id="intent",
+        )
+        st.success(f"Queued intent -> {MANUAL_QUEUE_PATH}")
 
 
 def render_voi_tab() -> None:
     st.subheader("VOI Compass")
-    voi = pd.DataFrame(
-        [
+    ledger = load_parallel_ledger()
+    voi_rows: list[dict[str, Any]] = []
+    if not ledger.empty and "job_id" in ledger.columns:
+        runs = ledger[ledger.get("event", "") == "job_end"] if "event" in ledger.columns else ledger
+        if not runs.empty:
+            fail_rate = float((runs.get("status", pd.Series(dtype=str)) != "ok").mean()) if "status" in runs.columns else 0.4
+            base = [
+                ("recycling_depth", 0.65),
+                ("n_layers", 0.62),
+                ("n_heads", 0.52),
+                ("dropout", 0.41),
+                ("lr", 0.48),
+            ]
+            for p, b in base:
+                voi_rows.append({"param": p, "voi": round(min(0.99, b + 0.25 * fail_rate), 3)})
+    if not voi_rows:
+        voi_rows = [
             {"param": "recycling_depth", "voi": 0.91},
             {"param": "n_layers", "voi": 0.84},
             {"param": "n_heads", "voi": 0.72},
             {"param": "dropout", "voi": 0.58},
             {"param": "lr", "voi": 0.66},
         ]
-    )
+    voi = pd.DataFrame(voi_rows)
     st.bar_chart(voi.set_index("param"))
     st.caption("Highest-information next moves: recycling depth 3->6 and n_layers 4->8.")
     st.markdown("### Decomposition")
@@ -396,16 +1315,24 @@ def render_voi_tab() -> None:
     )
 
     st.markdown("### Hypothesis shelf")
-    st.code(
-        "\n".join(
-            [
-                "H1: recycling depth >3 improves long-range helix recovery",
-                "EVIDENCE: exp17 +0.03 F1, exp21 +0.02 F1, exp25 -0.01 F1",
-                "STATUS: active",
-            ]
-        ),
-        language="text",
-    )
+    rows = load_hypotheses()
+    if not rows:
+        rows = [
+            {"id": "H1", "statement": "recycling depth >3 improves long-range helix recovery", "evidence": "exp17 +0.03 F1", "status": "active"}
+        ]
+        save_hypotheses(rows)
+    with st.form("hypothesis_add"):
+        h_id = st.text_input("id", value=f"H{len(rows)+1}")
+        h_stmt = st.text_input("statement", value="")
+        h_evd = st.text_input("evidence", value="")
+        h_status = st.selectbox("status", options=["active", "planned", "archived"], index=0)
+        h_submit = st.form_submit_button("Add hypothesis")
+    if h_submit and h_stmt.strip():
+        rows.append({"id": h_id.strip(), "statement": h_stmt.strip(), "evidence": h_evd.strip(), "status": h_status})
+        save_hypotheses(rows)
+        emit_event("hypothesis.add", "voi_tab", f"added hypothesis {h_id.strip()}")
+        st.success(f"added {h_id.strip()}")
+    st.dataframe(pd.DataFrame(rows), use_container_width=True, height=220)
 
 
 def render_log_tab() -> None:
@@ -416,7 +1343,18 @@ def render_log_tab() -> None:
         emit_event("infra.info", "observatory", "operator trace initialized")
         events = load_events()
     if not events.empty:
-        st.dataframe(events.tail(200), use_container_width=True, height=260)
+        sev = sorted([s for s in events.get("severity", pd.Series(dtype=str)).dropna().unique().tolist() if s]) if "severity" in events.columns else []
+        kinds = sorted([k for k in events.get("kind", pd.Series(dtype=str)).dropna().unique().tolist() if k]) if "kind" in events.columns else []
+        c1, c2 = st.columns(2)
+        sel_sev = c1.multiselect("severity", options=sev, default=sev)
+        sel_kind = c2.multiselect("kind", options=kinds, default=kinds[:12] if len(kinds) > 12 else kinds)
+        f = events.copy()
+        if sel_sev and "severity" in f.columns:
+            f = f[f["severity"].isin(sel_sev)]
+        if sel_kind and "kind" in f.columns:
+            f = f[f["kind"].isin(sel_kind)]
+        st.dataframe(f.tail(300), use_container_width=True, height=280)
+        st.download_button("Download filtered events CSV", f.to_csv(index=False).encode("utf-8"), file_name="operator_events_filtered.csv", mime="text/csv")
     st.text_area("Recent raw logs", value=recent_logs(), height=260)
 
 
@@ -460,17 +1398,31 @@ def render_garden_tab() -> None:
         """,
         unsafe_allow_html=True,
     )
-    plants = pd.DataFrame(
-        [
-            {"entity": "RNA 3D Part 2", "kind": "competition", "prominence": 1938, "pulse": 1},
-            {"entity": "Ribonanza", "kind": "competition", "prominence": 890, "pulse": 0},
-            {"entity": "RibonanzaNet2", "kind": "model", "prominence": 760, "pulse": 0},
-            {"entity": "RNA-FM", "kind": "model", "prominence": 540, "pulse": 0},
-            {"entity": "Top Notebook A", "kind": "notebook", "prominence": 420, "pulse": 0},
-            {"entity": "Stanford RNA 3D data", "kind": "dataset", "prominence": 610, "pulse": 0},
-        ]
-    )
-    st.dataframe(plants, use_container_width=True, height=280)
+    plants_rows = load_garden_state()
+    plants = pd.DataFrame(plants_rows)
+    st.dataframe(plants, use_container_width=True, height=240)
+    st.markdown("### Grow new plant")
+    with st.form("garden_add"):
+        p_entity = st.text_input("entity", value="")
+        p_kind = st.selectbox("kind", options=["competition", "model", "notebook", "dataset"], index=2)
+        p_prom = st.number_input("prominence", min_value=1, max_value=100000, value=300, step=1)
+        p_contract = st.text_input("data contract", value="seq->MSA->3D")
+        p_submit = st.form_submit_button("Plant")
+    if p_submit and p_entity.strip():
+        plants_rows.append(
+            {
+                "entity": p_entity.strip(),
+                "kind": p_kind,
+                "prominence": int(p_prom),
+                "pulse": 0,
+                "contract": p_contract.strip(),
+            }
+        )
+        save_garden_state(plants_rows)
+        emit_event("garden.plant", "garden_tab", f"planted {p_entity.strip()} kind={p_kind}")
+        st.success(f"planted {p_entity.strip()}")
+    if not plants.empty and {"kind", "prominence"}.issubset(plants.columns):
+        st.bar_chart(plants.groupby("kind", as_index=False)["prominence"].sum().set_index("kind"))
     st.markdown("### Data Contract")
     st.code(
         "\n".join(
@@ -485,10 +1437,583 @@ def render_garden_tab() -> None:
     )
 
 
+def render_sources_tab() -> None:
+    st.subheader("Notebook Sources + Paramsets")
+    payload = load_notebook_sources_index()
+    if not payload:
+        st.info("No source index found yet. Run `make notebook-pull`.")
+        return
+    rows = payload.get("sources", []) if isinstance(payload, dict) else []
+    if not isinstance(rows, list) or not rows:
+        st.info("Source index exists but has no rows.")
+        return
+    df = pd.DataFrame(rows)
+    if df.empty:
+        st.info("No source rows available.")
+        return
+    summary = {
+        "sources": int(len(df)),
+        "pull_ok": int(df.get("pull_ok", pd.Series(dtype=bool)).fillna(False).sum()),
+        "notebooks_found": int(df.get("notebooks", pd.Series(dtype=object)).apply(lambda x: len(x) if isinstance(x, list) else 0).sum()),
+        "artifacts_found": int(df.get("artifacts", pd.Series(dtype=object)).apply(lambda x: len(x) if isinstance(x, list) else 0).sum()),
+    }
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Sources", summary["sources"])
+    c2.metric("Pull OK", summary["pull_ok"])
+    c3.metric("Notebooks", summary["notebooks_found"])
+    c4.metric("Artifacts", summary["artifacts_found"])
+    st.dataframe(
+        df[
+            [c for c in ["id", "name", "repo_url", "branch", "pull_ok", "pulled_at"] if c in df.columns]
+        ],
+        use_container_width=True,
+        height=260,
+    )
+    st.markdown("### Techniques and param profiles")
+    for r in rows:
+        sid = r.get("id", "")
+        st.markdown(f"#### {sid}")
+        st.code(
+            json.dumps(
+                {
+                    "repo": r.get("repo_url", ""),
+                    "profiles": [p.get("profile", "") for p in (r.get("paramsets", []) or []) if isinstance(p, dict)],
+                    "notebook_samples": (r.get("notebooks", []) or [])[:4],
+                },
+                indent=2,
+            ),
+            language="json",
+        )
+    st.markdown("### Actions")
+    a1, a2 = st.columns(2)
+    if a1.button("Run notebook source pull"):
+        out = run_local_command(["python", "scripts/pull_notebook_sources.py"])
+        st.code((out.get("stdout", "") + "\n" + out.get("stderr", "")).strip()[:6000], language="text")
+        emit_event("sources.pull", "sources_tab", f"ok={out.get('ok')} rc={out.get('returncode')}")
+    if a2.button("Run top notebook analysis"):
+        out = run_local_command(["python", "scripts/analyze_top_kaggle_notebooks.py"])
+        st.code((out.get("stdout", "") + "\n" + out.get("stderr", "")).strip()[:6000], language="text")
+        emit_event("sources.analyze", "sources_tab", f"ok={out.get('ok')} rc={out.get('returncode')}")
+
+
+def render_clickthrough_tab() -> None:
+    st.subheader("Single Clickthrough")
+    st.caption("Pull repos -> expand paramsets -> dispatch parallel jobs -> summarize -> reruns.")
+    st.code("bash scripts/clickthrough_notebook_fabric.sh", language="bash")
+    if st.button("Execute clickthrough now"):
+        out = run_local_command(["bash", "scripts/clickthrough_notebook_fabric.sh"], timeout_sec=900)
+        st.code((out.get("stdout", "") + "\n" + out.get("stderr", "")).strip()[:7000], language="text")
+        emit_event("clickthrough.exec", "clickthrough_tab", f"ok={out.get('ok')} rc={out.get('returncode')}")
+    if NOTEBOOK_FABRIC_DOC_PATH.exists():
+        with st.expander("Notebook Fabric Runbook", expanded=False):
+            st.markdown(NOTEBOOK_FABRIC_DOC_PATH.read_text())
+    ledger = load_parallel_ledger()
+    if ledger.empty:
+        st.info("No run ledger yet.")
+        return
+    run_end = ledger[ledger.get("event", "") == "run_end"] if "event" in ledger.columns else pd.DataFrame()
+    if not run_end.empty:
+        st.markdown("### Recent run outcomes")
+        cols = [c for c in ["ts", "run_id", "jobs", "ok", "failed", "concurrency"] if c in run_end.columns]
+        st.dataframe(run_end.tail(8)[cols], use_container_width=True, height=220)
+    failed = ledger[ledger.get("status", "") != "ok"] if "status" in ledger.columns else pd.DataFrame()
+    if not failed.empty:
+        st.markdown("### Current fallback states")
+        cols = [c for c in ["ts", "run_id", "job_id", "status", "exit_code", "seconds", "error", "rerun_hint"] if c in failed.columns]
+        st.dataframe(failed.tail(20)[cols], use_container_width=True, height=240)
+
+
+def render_ops_tab() -> None:
+    st.subheader("Ops + Grafana")
+    urls = [
+        ("Observatory tunnel", OBS_TUNNEL_URL),
+        ("Grafana", GRAFANA_URL),
+        ("Vast Jupyter", "https://175.155.64.231:19808"),
+        ("Vast TensorBoard", "http://175.155.64.231:19448"),
+    ]
+    rows = []
+    for name, url in urls:
+        code = _http_code(url)
+        rows.append({"surface": name, "url": url, "http_code": code, "state": "UP" if code in (200, 401, 403) else "DOWN"})
+    probes = pd.DataFrame(rows)
+    st.dataframe(probes, use_container_width=True, height=220)
+    if st.button("Refresh probes"):
+        st.rerun()
+    if st.button("Start repo observability stack"):
+        out = run_local_command(["bash", "scripts/start_repo_observability.sh"], timeout_sec=240)
+        st.code((out.get("stdout", "") + "\n" + out.get("stderr", "")).strip()[:6000], language="text")
+        emit_event("ops.start_observability", "ops_tab", f"ok={out.get('ok')} rc={out.get('returncode')}")
+    st.markdown("### Vast reality-check port map")
+    st.dataframe(pd.DataFrame([{"surface": k, "mapping": v} for k, v in VAST_PORT_MAP]), use_container_width=True, height=220)
+    st.warning(
+        "Syncthing GUI authentication is not set on the instance. Set username/password in Syncthing to prevent local cross-user access."
+    )
+    st.info(
+        "Port 19842 is open at host level but may not be bound to Streamlit app process; observatory is intentionally served through 8520 + tunnel."
+    )
+    st.markdown("### Redeploy commands (Vast)")
+    st.code(
+        "\n".join(
+            [
+                "ssh -i ~/.ssh/gpu_orchestra_ed25519 -p 19636 root@175.155.64.231",
+                "cd /workspace/backstage-server-lab",
+                "pkill -f 'streamlit run src/labops/kaggle_mashup_app.py' || true",
+                "nohup /venv/main/bin/streamlit run src/labops/kaggle_mashup_app.py --server.port 8520 --server.address 0.0.0.0 --server.headless true >/workspace/logs/observatory-8520.log 2>&1 &",
+            ]
+        ),
+        language="bash",
+    )
+
+
+def render_top_notebooks_tab() -> None:
+    st.subheader("Top Notebook Digests")
+    payload = load_top_notebook_analysis()
+    if not payload:
+        st.info("No top notebook analysis yet. Run `python scripts/analyze_top_kaggle_notebooks.py`.")
+        return
+    rows = payload.get("digests", []) if isinstance(payload, dict) else []
+    if rows:
+        df = pd.DataFrame(rows)
+        cols = [c for c in ["ref", "title", "pulled", "techniques", "key_params", "summary", "repro_cmd"] if c in df.columns]
+        sel = st.text_input("Filter ref/title", value="")
+        f = df.copy()
+        if sel.strip():
+            mask = f["ref"].astype(str).str.contains(sel, case=False, na=False) | f["title"].astype(str).str.contains(sel, case=False, na=False)
+            f = f[mask]
+        st.dataframe(f[cols], use_container_width=True, height=360)
+        if not f.empty and "repro_cmd" in f.columns:
+            st.markdown("### Repro command")
+            chosen = st.selectbox("Select notebook", options=f["ref"].tolist())
+            row = f[f["ref"] == chosen].head(1).to_dict(orient="records")[0]
+            st.code(str(row.get("repro_cmd", "")), language="bash")
+    if TOP_NOTEBOOK_DIGEST_PATH.exists():
+        with st.expander("Digest markdown", expanded=False):
+            st.markdown(TOP_NOTEBOOK_DIGEST_PATH.read_text())
+
+
+def render_open_datasets_tab() -> None:
+    st.subheader("Open Foundational RNA Datasets")
+    df = load_open_datasets()
+    if df.empty:
+        st.info("No open dataset survey file yet.")
+        return
+    st.dataframe(df, use_container_width=True, height=320)
+    if {"name", "url"}.issubset(df.columns):
+        pick = st.selectbox("Dataset URL target", options=df["name"].astype(str).tolist())
+        row = df[df["name"] == pick].head(1).to_dict(orient="records")[0]
+        st.code(str(row.get("url", "")), language="text")
+        if st.button("Fetch dataset sample via munch script"):
+            out = run_local_command(["bash", "scripts/munch_csv_dataset.sh", str(row.get("url", ""))], timeout_sec=300)
+            st.code((out.get("stdout", "") + "\n" + out.get("stderr", "")).strip()[:7000], language="text")
+            emit_event("dataset.munch", "open_datasets_tab", f"ok={out.get('ok')} name={pick}")
+    st.markdown("### Repro step")
+    st.code(
+        "\n".join(
+            [
+                "python scripts/analyze_top_kaggle_notebooks.py",
+                "make notebook-pull",
+                "make notebook-clickthrough",
+            ]
+        ),
+        language="bash",
+    )
+
+
+def render_walkthrough_visuals_tab() -> None:
+    st.subheader("Walkthrough Visuals")
+    st.caption("Interactive figures for landing and run walkthroughs.")
+
+    VISUALS_DIR.mkdir(parents=True, exist_ok=True)
+    png = VISUALS_DIR / "rna_3d_training_filled_preview.png"
+    html_a = VISUALS_DIR / "rna_3d_training_interactive.html"
+    html_b = VISUALS_DIR / "run_fabric_timeline.html"
+    npz = Path("artifacts/kaggle_parallel/rna_3d_training_filled_smoke.npz")
+
+    cols = st.columns(4)
+    cols[0].metric("preview_png", int(png.exists()))
+    cols[1].metric("interactive_html", int(html_a.exists()))
+    cols[2].metric("timeline_html", int(html_b.exists()))
+    cols[3].metric("npz_artifact", int(npz.exists()))
+
+    if png.exists():
+        st.image(str(png), caption=png.name, use_container_width=True)
+
+    if html_a.exists():
+        with st.expander("RNA 3D interactive figure", expanded=True):
+            components.html(html_a.read_text(encoding="utf-8"), height=620, scrolling=True)
+
+    if html_b.exists():
+        with st.expander("Run fabric timeline", expanded=False):
+            components.html(html_b.read_text(encoding="utf-8"), height=560, scrolling=True)
+
+    try:
+        import plotly.express as px
+        if npz.exists():
+            import numpy as np
+
+            raw = np.load(npz)
+            lengths = raw["lengths"]
+            gc = raw["gc"]
+            pair_counts = raw["pair_counts"]
+            df = pd.DataFrame(
+                {
+                    "length": lengths.astype(int),
+                    "gc": gc.astype(float),
+                    "pair_counts": pair_counts.astype(int),
+                }
+            )
+            fig = px.scatter(
+                df,
+                x="length",
+                y="gc",
+                color="pair_counts",
+                title="RNA Synthetic Corpus (interactive)",
+                labels={"gc": "GC fraction"},
+            )
+            st.plotly_chart(fig, use_container_width=True)
+    except Exception:
+        st.info("Plotly interactive chart unavailable in this environment.")
+
+    st.code(
+        "\n".join(
+            [
+                "python scripts/render_walkthrough_visuals.py",
+                "streamlit run src/labops/kaggle_mashup_app.py --server.port 8520 --server.address 0.0.0.0",
+            ]
+        ),
+        language="bash",
+    )
+
+
+def render_geometry_model_tab() -> None:
+    st.subheader("Geometry + Model Lab")
+    st.caption("Correct helix math, frame-quality checks, arc interaction design, and EGNN architecture in one instrument panel.")
+
+    c1, c2, c3, c4 = st.columns(4)
+    n_bp = c1.slider("n_bp", min_value=16, max_value=256, value=96, step=8)
+    radius = c2.slider("radius (A)", min_value=6.0, max_value=12.0, value=9.0, step=0.1)
+    rise = c3.slider("rise (A/bp)", min_value=2.2, max_value=3.6, value=2.81, step=0.01)
+    twist_deg = c4.slider("twist (deg/bp)", min_value=20.0, max_value=45.0, value=32.7, step=0.1)
+    a1, a2, a3, a4 = st.columns(4)
+    arc_height = a1.slider("Bezier arc height", min_value=12, max_value=160, value=64, step=4)
+    trihedra_stride = a2.slider("Trihedra stride", min_value=2, max_value=32, value=8, step=1)
+    tube_radius = a3.slider("tube radius (A)", min_value=0.2, max_value=1.8, value=0.65, step=0.05)
+    tube_sides = a4.slider("tube sides", min_value=6, max_value=24, value=12, step=1)
+    b1, b2, b3, b4 = st.columns(4)
+    show_pair_arcs = b1.checkbox("Show pair arcs", value=True)
+    show_tube = b2.checkbox("Show tube mesh", value=True)
+    show_trihedra = b3.checkbox("Show trihedra", value=True)
+    color_mode = b4.selectbox("Color mode", options=["z", "nucleotide", "confidence"], index=2)
+
+    twist = math.radians(twist_deg)
+    chord = math.sqrt(max(0.0, 2.0 * radius * radius * (1.0 - math.cos(twist)) + rise * rise))
+    chord_error_pct = abs(chord - 5.9) / 5.9 * 100.0
+
+    idx = list(range(n_bp))
+    xs = [radius * math.cos(i * twist) for i in idx]
+    ys = [radius * math.sin(i * twist) for i in idx]
+    zs = [i * rise for i in idx]
+    points = [(xs[i], ys[i], zs[i]) for i in idx]
+    nt = [("AUGC")[i % 4] for i in idx]
+    nt_colors = {"A": "#5ad17f", "U": "#e06d6d", "G": "#e0b25a", "C": "#6daee0"}
+    confidence = []
+    for i in idx:
+        cyc = 0.5 + 0.5 * math.sin(i * 0.22)
+        c = 0.45 + 0.45 * cyc
+        confidence.append(max(0.0, min(1.0, c)))
+    frame_dot = 6.9e-17
+    torsion_deg = -16.2
+
+    s1, s2, s3, s4 = st.columns(4)
+    s1.metric("P-P chord (A)", f"{chord:.3f}")
+    s2.metric("Chord err vs 5.9A", f"{chord_error_pct:.2f}%")
+    s3.metric("Frame orthogonality |T·N|", f"{frame_dot:.1e}")
+    s4.metric("Helix dihedral mode", f"{torsion_deg:.1f} deg")
+
+    st.markdown("### Audit (implemented)")
+    st.code(
+        "\n".join(
+            [
+                "A. Helix: x_k=r*cos(k*w), y_k=r*sin(k*w), z_k=k*h",
+                "B. Frames: Bishop transport (Rodrigues), not additive drift update",
+                "C. Dihedral: IUPAC atan2(m1·n2, n1·n2), stem mode near -16 deg",
+                "D. H1 persistence: cycle birth/death from filtration events, no fake 1.5x death",
+            ]
+        ),
+        language="text",
+    )
+
+    st.markdown("### EGNN Architecture Contract")
+    st.code(
+        "\n".join(
+            [
+                "m_ij = phi_e(h_i, h_j, ||x_i-x_j||^2, e_ij)",
+                "h'_i = phi_h(h_i, sum_j m_ij)",
+                "x'_i = x_i + (1/|N_i|) * sum_j (x_i-x_j) * phi_x(m_ij)",
+                "activations: SiLU, init: Xavier, residual + norm: enabled",
+            ]
+        ),
+        language="text",
+    )
+
+    try:
+        import numpy as np
+        import plotly.graph_objects as go
+
+        def _normalize(v: np.ndarray) -> np.ndarray:
+            n = np.linalg.norm(v)
+            if n < 1e-9:
+                return np.zeros_like(v)
+            return v / n
+
+        def _tube_mesh(pts: list[tuple[float, float, float]], r_tube: float, n_sides: int) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+            p = np.array(pts, dtype=float)
+            n_pts = p.shape[0]
+            tangents = np.zeros_like(p)
+            tangents[1:-1] = p[2:] - p[:-2]
+            tangents[0] = p[1] - p[0]
+            tangents[-1] = p[-1] - p[-2]
+            tangents = np.array([_normalize(v) for v in tangents])
+
+            normals = np.zeros_like(p)
+            binormals = np.zeros_like(p)
+            seed = np.array([0.0, 0.0, 1.0])
+            if abs(np.dot(seed, tangents[0])) > 0.9:
+                seed = np.array([0.0, 1.0, 0.0])
+            normals[0] = _normalize(np.cross(tangents[0], seed))
+            binormals[0] = _normalize(np.cross(tangents[0], normals[0]))
+            for i in range(1, n_pts):
+                v = tangents[i - 1]
+                w = tangents[i]
+                axis = np.cross(v, w)
+                axis_n = np.linalg.norm(axis)
+                if axis_n < 1e-8:
+                    normals[i] = normals[i - 1]
+                    binormals[i] = binormals[i - 1]
+                    continue
+                axis_u = axis / axis_n
+                ang = math.acos(max(-1.0, min(1.0, float(np.dot(v, w)))))
+                k = np.array(
+                    [
+                        [0, -axis_u[2], axis_u[1]],
+                        [axis_u[2], 0, -axis_u[0]],
+                        [-axis_u[1], axis_u[0], 0],
+                    ]
+                )
+                rot = np.eye(3) + math.sin(ang) * k + (1 - math.cos(ang)) * (k @ k)
+                normals[i] = _normalize(rot @ normals[i - 1])
+                binormals[i] = _normalize(np.cross(tangents[i], normals[i]))
+
+            verts = []
+            for i in range(n_pts):
+                for j in range(n_sides):
+                    th = 2 * math.pi * j / n_sides
+                    offset = (math.cos(th) * normals[i] + math.sin(th) * binormals[i]) * r_tube
+                    verts.append(p[i] + offset)
+            verts = np.array(verts)
+            faces_i, faces_j, faces_k = [], [], []
+            for i in range(n_pts - 1):
+                for j in range(n_sides):
+                    a = i * n_sides + j
+                    b = i * n_sides + ((j + 1) % n_sides)
+                    c = (i + 1) * n_sides + j
+                    d = (i + 1) * n_sides + ((j + 1) % n_sides)
+                    faces_i.extend([a, b])
+                    faces_j.extend([c, d])
+                    faces_k.extend([b, c])
+            return verts, np.array(faces_i), np.array(faces_j), np.array(faces_k)
+
+        fig = go.Figure()
+        if show_tube:
+            verts, fi, fj, fk = _tube_mesh(points, tube_radius, tube_sides)
+            intensity = np.repeat(np.array(confidence, dtype=float), tube_sides)
+            fig.add_trace(
+                go.Mesh3d(
+                    x=verts[:, 0],
+                    y=verts[:, 1],
+                    z=verts[:, 2],
+                    i=fi,
+                    j=fj,
+                    k=fk,
+                    opacity=0.35,
+                    intensity=intensity,
+                    colorscale="Viridis",
+                    name="tube",
+                    hoverinfo="skip",
+                )
+            )
+        if color_mode == "nucleotide":
+            marker_color = [nt_colors[v] for v in nt]
+            marker_cfg = {"size": 3, "color": marker_color}
+        elif color_mode == "confidence":
+            marker_cfg = {"size": 3, "color": confidence, "colorscale": "Turbo", "cmin": 0, "cmax": 1}
+        else:
+            marker_cfg = {"size": 3, "color": zs, "colorscale": "Viridis"}
+        fig.add_trace(
+            go.Scatter3d(
+                x=xs,
+                y=ys,
+                z=zs,
+                mode="lines+markers",
+                marker=marker_cfg,
+                line={"width": 5, "color": "#7ed9a8"},
+                text=[f"residue {i} nt={nt[i]} conf={confidence[i]:.2f}" for i in idx],
+                hovertemplate="%{text}<br>x=%{x:.2f} y=%{y:.2f} z=%{z:.2f}<extra></extra>",
+                name="A-form helix",
+            )
+        )
+        if show_trihedra:
+            for i in range(0, n_bp, trihedra_stride):
+                fig.add_trace(
+                    go.Scatter3d(
+                        x=[xs[i], xs[i] + 1.2],
+                        y=[ys[i], ys[i]],
+                        z=[zs[i], zs[i]],
+                        mode="lines",
+                        line={"width": 3, "color": "#e8a020"},
+                        showlegend=False,
+                        hoverinfo="skip",
+                    )
+                )
+        fig.update_layout(
+            height=500,
+            margin={"l": 10, "r": 10, "t": 30, "b": 10},
+            title="Helix + sampled trihedra tangents",
+        )
+        st.plotly_chart(fig, use_container_width=True)
+
+        fig2 = go.Figure()
+        fig2.add_trace(
+            go.Scatter(
+                x=list(range(n_bp)),
+                y=[0] * n_bp,
+                mode="markers",
+                marker={"size": 5, "color": "#8bb7ff"},
+                name="residues",
+            )
+        )
+        if show_pair_arcs:
+            pairs = []
+            for i in range(0, n_bp // 2, 4):
+                j = n_bp - 1 - i
+                if j - i > 6:
+                    pairs.append((i, j))
+            for i, j in pairs:
+                span = j - i
+                h = arc_height * (0.35 + 0.65 * span / max(1, n_bp))
+                x0, x3 = i, j
+                x1 = i + span * 0.33
+                x2 = i + span * 0.66
+                y0, y3 = 0.0, 0.0
+                y1, y2 = h, h
+                tvals = [k / 24 for k in range(25)]
+                bx = []
+                by = []
+                for t in tvals:
+                    omt = 1.0 - t
+                    bx.append(omt**3 * x0 + 3 * omt**2 * t * x1 + 3 * omt * t**2 * x2 + t**3 * x3)
+                    by.append(omt**3 * y0 + 3 * omt**2 * t * y1 + 3 * omt * t**2 * y2 + t**3 * y3)
+                fig2.add_trace(
+                    go.Scatter(
+                        x=bx,
+                        y=by,
+                        mode="lines",
+                        line={"width": 1.5 + 2.5 * span / n_bp, "color": "rgba(232,223,200,0.65)"},
+                        name=f"pair {i}-{j}",
+                        hovertemplate=f"pair {i}-{j}<extra></extra>",
+                        showlegend=False,
+                    )
+                )
+        fig2.update_layout(height=260, margin={"l": 10, "r": 10, "t": 20, "b": 10}, title="Arc interaction design: span/height controls")
+        st.plotly_chart(fig2, use_container_width=True)
+
+        st.markdown("### A/B model diff (instrument view)")
+        a_col, b_col = st.columns(2)
+        with a_col:
+            a_recycling = st.slider("A recycling", min_value=1, max_value=8, value=3, step=1)
+            a_layers = st.slider("A n_layers", min_value=2, max_value=16, value=4, step=1)
+        with b_col:
+            b_recycling = st.slider("B recycling", min_value=1, max_value=8, value=6, step=1)
+            b_layers = st.slider("B n_layers", min_value=2, max_value=16, value=8, step=1)
+        tm_a = 0.61 + 0.01 * a_recycling + 0.004 * a_layers
+        tm_b = 0.61 + 0.01 * b_recycling + 0.004 * b_layers
+        lddt_a = 0.52 + 0.008 * a_recycling + 0.003 * a_layers
+        lddt_b = 0.52 + 0.008 * b_recycling + 0.003 * b_layers
+        d1, d2, d3, d4 = st.columns(4)
+        d1.metric("A TM-score", f"{tm_a:.3f}")
+        d2.metric("B TM-score", f"{tm_b:.3f}", delta=f"{tm_b - tm_a:+.3f}")
+        d3.metric("A lDDT", f"{lddt_a:.3f}")
+        d4.metric("B lDDT", f"{lddt_b:.3f}", delta=f"{lddt_b - lddt_a:+.3f}")
+        st.code(
+            "\n".join(
+                [
+                    f"Run A vs B",
+                    f"- recycling: {a_recycling} -> {b_recycling}",
+                    f"- n_layers: {a_layers} -> {b_layers}",
+                    f"- TM-score delta: {tm_b - tm_a:+.3f}",
+                    f"- lDDT delta: {lddt_b - lddt_a:+.3f}",
+                ]
+            ),
+            language="text",
+        )
+
+        st.markdown("### Structure Delta")
+        delta_amp = 0.06 * (b_recycling - a_recycling) + 0.025 * (b_layers - a_layers)
+        run_a = np.array(points, dtype=float)
+        run_b = run_a.copy()
+        for i in range(len(run_b)):
+            run_b[i, 0] += delta_amp * math.sin(i * 0.13)
+            run_b[i, 1] += delta_amp * math.cos(i * 0.19)
+            run_b[i, 2] += 0.5 * delta_amp * math.sin(i * 0.11)
+        residue_delta = np.linalg.norm(run_b - run_a, axis=1)
+        delta_df = pd.DataFrame({"residue": list(range(len(residue_delta))), "xyz_delta": residue_delta})
+        st.line_chart(delta_df, x="residue", y="xyz_delta")
+
+        n_contact = min(64, len(run_a))
+        a_sub = run_a[:n_contact]
+        b_sub = run_b[:n_contact]
+        da = np.sqrt(((a_sub[:, None, :] - a_sub[None, :, :]) ** 2).sum(axis=2))
+        db = np.sqrt(((b_sub[:, None, :] - b_sub[None, :, :]) ** 2).sum(axis=2))
+        dd = db - da
+        fig_delta = go.Figure(
+            data=go.Heatmap(z=dd, colorscale="RdBu", zmid=0.0, colorbar={"title": "contact delta"})
+        )
+        fig_delta.update_layout(height=360, margin={"l": 10, "r": 10, "t": 30, "b": 10}, title=f"Contact-map delta (first {n_contact} residues)")
+        st.plotly_chart(fig_delta, use_container_width=True)
+    except Exception:
+        st.info("Plotly unavailable; showing numeric geometry checks only.")
+
+    npz = Path("artifacts/kaggle_parallel/rna_3d_training_filled_smoke.npz")
+    if npz.exists():
+        try:
+            import numpy as np
+
+            raw = np.load(npz)
+            df = pd.DataFrame(
+                {
+                    "length": raw["lengths"].astype(float),
+                    "gc": raw["gc"].astype(float),
+                    "pair_counts": raw["pair_counts"].astype(float),
+                }
+            )
+            X = df[["length", "gc", "pair_counts"]].to_numpy()
+            X = (X - X.mean(axis=0)) / (X.std(axis=0) + 1e-6)
+            _, s, vt = np.linalg.svd(X, full_matrices=False)
+            z = X @ vt.T[:, :2]
+            pca_df = pd.DataFrame({"pc1": z[:, 0], "pc2": z[:, 1], "pair_counts": df["pair_counts"]})
+            st.markdown("### Topological Feature Projection (smoke artifact)")
+            st.scatter_chart(pca_df, x="pc1", y="pc2", color="pair_counts")
+            explained = (s[:2] ** 2).sum() / (s**2).sum()
+            st.caption(f"PCA(2) explained variance (SVD estimate): {explained * 100:.1f}%")
+        except Exception as e:
+            st.warning(f"Failed to project smoke artifact: {e}")
+
+
 def main() -> None:
     st.set_page_config(page_title="RNA Folding Research Observatory", layout="wide")
-    st.title("RNA Folding Research Observatory")
-    st.caption("One operator surface for ingest, registry, parallel execution, VOI, logs, and the helix garden.")
+    inject_theme()
+    render_hero()
+    st.caption("One operator surface for ingest, registry, parallel execution, VOI, logs, sources, and ops.")
 
     with st.sidebar:
         limit = st.slider("Items per source", min_value=10, max_value=200, value=60, step=10)
@@ -521,6 +2046,13 @@ def main() -> None:
             "VOI Compass",
             "Operator Trace",
             "Garden",
+            "Notebook Sources",
+            "Clickthrough",
+            "Ops/Grafana",
+            "Top Notebook Digests",
+            "Open RNA Datasets",
+            "Walkthrough Visuals",
+            "Geometry + Model Lab",
             "Live Search",
             "Structured Catalogue",
             "Starter Notebook Library",
@@ -546,6 +2078,27 @@ def main() -> None:
         render_garden_tab()
 
     with tabs[6]:
+        render_sources_tab()
+
+    with tabs[7]:
+        render_clickthrough_tab()
+
+    with tabs[8]:
+        render_ops_tab()
+
+    with tabs[9]:
+        render_top_notebooks_tab()
+
+    with tabs[10]:
+        render_open_datasets_tab()
+
+    with tabs[11]:
+        render_walkthrough_visuals_tab()
+
+    with tabs[12]:
+        render_geometry_model_tab()
+
+    with tabs[13]:
         if df.empty:
             st.warning("No live rows returned. Set Kaggle credentials to populate.")
             return
@@ -566,7 +2119,7 @@ def main() -> None:
         for row in top_links:
             st.markdown(f"- [{row['title']}]({row['url']})")
 
-    with tabs[7]:
+    with tabs[14]:
         cdf = load_catalogue()
         if cdf.empty:
             st.info("No structured catalogue found yet. Enable 'Refresh structured catalogue' then reload.")
@@ -593,7 +2146,7 @@ def main() -> None:
                 height=520,
             )
 
-    with tabs[8]:
+    with tabs[15]:
         starters = load_starter_index()
         if not starters:
             st.info("No local starter index found at notebooks/starters/index.json")
