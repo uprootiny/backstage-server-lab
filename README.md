@@ -251,7 +251,16 @@ make rna-ingest INPUT=/path/result.csv RUN_ID=exp42 SEQUENCE=AUGCUA MODEL=my-mod
 - Validation bench details: `docs/MLOPS_VALIDATION_BENCH.md`
 - Kaggle RNA catalogue notes: `docs/KAGGLE_RNA_CATALOGUE.md`
 - Vast worker operations: `docs/GPU_WORKER_OPERATIONS.md`
+- Vast tri-mode operations: `docs/VAST_TRI_MODE_PLAYBOOK.md`
+- Vast instance operating model: `docs/VAST_INSTANCE_OPERATING_MODEL.md`
 - Repo observability runbook: `docs/REPO_OBSERVABILITY.md`
+- Dashboard layouts: `docs/DASHBOARD_LAYOUTS.md`
+- Metrics catalog: `docs/METRICS_CATALOG.md`
+- Scoring model: `docs/SCORING_MODEL.md`
+- Completion ledgers: `docs/COMPLETION_LEDGERS.md`
+- Multi-perspective roadmaps: `docs/ROADMAP_PERSPECTIVES.md`
+- 30-day execution roadmap: `docs/ROADMAP_30D_EXECUTION.md`
+- RNA research summaries: `docs/RNA_RESEARCH_SUMMARIES.md`
 - Script execution evidence: `docs/SCRIPT_EXECUTION_LEDGER.md`
 
 ## Dependency Policy

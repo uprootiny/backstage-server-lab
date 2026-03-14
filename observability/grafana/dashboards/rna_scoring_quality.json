@@ -1,0 +1,54 @@
+{
+  "title": "RNA Scoring and Quality",
+  "uid": "rna-scoring-quality",
+  "schemaVersion": 39,
+  "version": 1,
+  "panels": [
+    {
+      "id": 1,
+      "title": "TM-score Distribution",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 0},
+      "targets": [{"expr": "histogram_quantile(0.5, sum(rate(rna_tm_score_bucket[1h])) by (le))"}]
+    },
+    {
+      "id": 2,
+      "title": "lDDT Distribution",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 0},
+      "targets": [{"expr": "histogram_quantile(0.5, sum(rate(rna_lddt_score_bucket[1h])) by (le))"}]
+    },
+    {
+      "id": 3,
+      "title": "Confidence Calibration Error",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 0},
+      "targets": [{"expr": "rna_confidence_calibration_error"}]
+    },
+    {
+      "id": 4,
+      "title": "Dropout Robustness",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+      "targets": [
+        {"expr": "rna_family_dropout_score"},
+        {"expr": "rna_motif_dropout_score"},
+        {"expr": "rna_length_band_score"}
+      ]
+    },
+    {
+      "id": 5,
+      "title": "VOI Score",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+      "targets": [{"expr": "histogram_quantile(0.9, sum(rate(rna_voi_score_bucket[1h])) by (le))"}]
+    },
+    {
+      "id": 6,
+      "title": "Run Quality Score",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 16},
+      "targets": [{"expr": "rna_run_quality_score"}]
+    }
+  ]
+}
