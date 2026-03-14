@@ -1,0 +1,172 @@
+{
+  "generated_at": "2026-03-14T17:49:40.846827Z",
+  "kind": "rna_technique_matrix_validation",
+  "run_id": "kaggle-parallel-20260314T174604Z",
+  "plan": "/home/uprootiny/backstage-server-lab/artifacts/kaggle_parallel/plan_rna_technique_matrix.json",
+  "ledger": "/home/uprootiny/backstage-server-lab/artifacts/kaggle_parallel/ledger.jsonl",
+  "expected_jobs": 9,
+  "observed_jobs": 9,
+  "ok": 9,
+  "failed": 0,
+  "missing_output_notebooks": [],
+  "group_summary": [
+    {
+      "technique_id": "baseline_reliable",
+      "dataset_id": "stanford_rna_3d_kaggle",
+      "param_profile": "base",
+      "runs": 1,
+      "ok": 1,
+      "failed": 0,
+      "success_rate": 1.0,
+      "median_seconds": 108.28
+    },
+    {
+      "technique_id": "baseline_reliable",
+      "dataset_id": "stanford_rna_3d_kaggle",
+      "param_profile": "p_recycle_6",
+      "runs": 1,
+      "ok": 1,
+      "failed": 0,
+      "success_rate": 1.0,
+      "median_seconds": 107.43
+    },
+    {
+      "technique_id": "baseline_reliable",
+      "dataset_id": "stanford_rna_3d_kaggle",
+      "param_profile": "p_seed_3",
+      "runs": 1,
+      "ok": 1,
+      "failed": 0,
+      "success_rate": 1.0,
+      "median_seconds": 104.28
+    },
+    {
+      "technique_id": "high_score_pragmatic",
+      "dataset_id": "stanford_rna_3d_kaggle",
+      "param_profile": "base",
+      "runs": 1,
+      "ok": 1,
+      "failed": 0,
+      "success_rate": 1.0,
+      "median_seconds": 6.57
+    },
+    {
+      "technique_id": "high_score_pragmatic",
+      "dataset_id": "stanford_rna_3d_kaggle",
+      "param_profile": "p_recycle_10",
+      "runs": 1,
+      "ok": 1,
+      "failed": 0,
+      "success_rate": 1.0,
+      "median_seconds": 6.6
+    },
+    {
+      "technique_id": "high_score_pragmatic",
+      "dataset_id": "stanford_rna_3d_kaggle",
+      "param_profile": "p_template_off",
+      "runs": 1,
+      "ok": 1,
+      "failed": 0,
+      "success_rate": 1.0,
+      "median_seconds": 6.98
+    },
+    {
+      "technique_id": "insight_maximizer",
+      "dataset_id": "stanford_rna_3d_kaggle",
+      "param_profile": "base",
+      "runs": 1,
+      "ok": 1,
+      "failed": 0,
+      "success_rate": 1.0,
+      "median_seconds": 6.62
+    },
+    {
+      "technique_id": "insight_maximizer",
+      "dataset_id": "stanford_rna_3d_kaggle",
+      "param_profile": "p_delta_020",
+      "runs": 1,
+      "ok": 1,
+      "failed": 0,
+      "success_rate": 1.0,
+      "median_seconds": 6.67
+    },
+    {
+      "technique_id": "insight_maximizer",
+      "dataset_id": "stanford_rna_3d_kaggle",
+      "param_profile": "p_delta_030",
+      "runs": 1,
+      "ok": 1,
+      "failed": 0,
+      "success_rate": 1.0,
+      "median_seconds": 6.32
+    }
+  ],
+  "perturbation_effects": [
+    {
+      "technique_id": "baseline_reliable",
+      "dataset_id": "stanford_rna_3d_kaggle",
+      "repeat": 1,
+      "param_profile": "p_recycle_6",
+      "base_status": "ok",
+      "status": "ok",
+      "base_seconds": 108.28,
+      "seconds": 107.43,
+      "delta_seconds": -0.85
+    },
+    {
+      "technique_id": "baseline_reliable",
+      "dataset_id": "stanford_rna_3d_kaggle",
+      "repeat": 1,
+      "param_profile": "p_seed_3",
+      "base_status": "ok",
+      "status": "ok",
+      "base_seconds": 108.28,
+      "seconds": 104.28,
+      "delta_seconds": -4.0
+    },
+    {
+      "technique_id": "high_score_pragmatic",
+      "dataset_id": "stanford_rna_3d_kaggle",
+      "repeat": 1,
+      "param_profile": "p_template_off",
+      "base_status": "ok",
+      "status": "ok",
+      "base_seconds": 6.57,
+      "seconds": 6.98,
+      "delta_seconds": 0.41
+    },
+    {
+      "technique_id": "high_score_pragmatic",
+      "dataset_id": "stanford_rna_3d_kaggle",
+      "repeat": 1,
+      "param_profile": "p_recycle_10",
+      "base_status": "ok",
+      "status": "ok",
+      "base_seconds": 6.57,
+      "seconds": 6.6,
+      "delta_seconds": 0.03
+    },
+    {
+      "technique_id": "insight_maximizer",
+      "dataset_id": "stanford_rna_3d_kaggle",
+      "repeat": 1,
+      "param_profile": "p_delta_030",
+      "base_status": "ok",
+      "status": "ok",
+      "base_seconds": 6.62,
+      "seconds": 6.32,
+      "delta_seconds": -0.3
+    },
+    {
+      "technique_id": "insight_maximizer",
+      "dataset_id": "stanford_rna_3d_kaggle",
+      "repeat": 1,
+      "param_profile": "p_delta_020",
+      "base_status": "ok",
+      "status": "ok",
+      "base_seconds": 6.62,
+      "seconds": 6.67,
+      "delta_seconds": 0.05
+    }
+  ]
+}

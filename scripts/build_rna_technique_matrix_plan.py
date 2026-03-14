@@ -89,6 +89,19 @@ def parse_techniques(raw: dict[str, Any]) -> list[TechniqueSpec]:
     return out
 
 
+def parse_overrides(pairs: list[str]) -> dict[str, str]:
+    out: dict[str, str] = {}
+    for item in pairs:
+        if "=" not in item:
+            continue
+        key, value = item.split("=", 1)
+        key = key.strip()
+        value = value.strip()
+        if key and value:
+            out[key] = value
+    return out
+
+
 def build_jobs(raw: dict[str, Any], datasets: list[DatasetSpec], techniques: list[TechniqueSpec], max_jobs: int) -> list[dict[str, Any]]:
     repeats = int(raw.get("repeats", 1))
     jobs: list[dict[str, Any]] = []
@@ -142,11 +155,25 @@ def main() -> None:
     ap.add_argument("--out-plan", default="artifacts/kaggle_parallel/plan_rna_technique_matrix.json")
     ap.add_argument("--out-manifest", default="artifacts/kaggle_parallel/rna_technique_matrix_manifest.json")
     ap.add_argument("--max-jobs", type=int, default=20)
+    ap.add_argument(
+        "--notebook-override",
+        action="append",
+        default=[],
+        metavar="TECHNIQUE_ID=PATH",
+        help="Override notebook path for a technique id; can be passed multiple times.",
+    )
     args = ap.parse_args()
 
     cfg = load_cfg(Path(args.config))
     datasets = parse_datasets(cfg)
     techniques = parse_techniques(cfg)
+
+    overrides = parse_overrides(list(args.notebook_override))
+    if overrides:
+        for tech in techniques:
+            if tech.technique_id in overrides:
+                tech.notebook = overrides[tech.technique_id]
+
     jobs = build_jobs(cfg, datasets, techniques, max_jobs=int(args.max_jobs))
     if not jobs:
         raise SystemExit("no runnable jobs generated (notebooks missing?)")
