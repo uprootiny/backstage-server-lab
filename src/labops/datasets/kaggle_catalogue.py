@@ -5,7 +5,6 @@ from pathlib import Path
 from typing import Any
 
 import orjson
-from kaggle.api.kaggle_api_extended import KaggleApi
 
 
 RNA_HINTS: dict[str, dict[str, str]] = {
@@ -90,7 +89,7 @@ def _infer_shape(domain: str) -> tuple[str, str, str]:
     return ("tabular/text/image mixed", "framework-specific", "task-specific")
 
 
-def _load_models(api: KaggleApi, search: str, limit: int) -> list[Any]:
+def _load_models(api: Any, search: str, limit: int) -> list[Any]:
     for method in ("models_list", "model_list"):
         fn = getattr(api, method, None)
         if fn is None:
@@ -103,7 +102,7 @@ def _load_models(api: KaggleApi, search: str, limit: int) -> list[Any]:
     return []
 
 
-def _load_notebooks(api: KaggleApi, search: str, limit: int) -> list[Any]:
+def _load_notebooks(api: Any, search: str, limit: int) -> list[Any]:
     fn = getattr(api, "kernels_list", None)
     if fn is None:
         return []
@@ -115,6 +114,8 @@ def _load_notebooks(api: KaggleApi, search: str, limit: int) -> list[Any]:
 
 
 def build_catalogue(out: Path, search: str = "rna", limit: int = 80) -> Path:
+    from kaggle.api.kaggle_api_extended import KaggleApi
+
     api = KaggleApi()
     api.authenticate()
 

@@ -13,6 +13,10 @@ from .bench import export_thesis_graph, run_bench
 from .datasets.kaggle_catalogue import build_catalogue
 from .datasets.kaggle import sync_kaggle
 from .kaggle_mass_study import build_notebook_minimap
+from .kaggle_parallel import dispatch as kaggle_parallel_dispatch
+from .kaggle_parallel import init_plan as kaggle_parallel_init_plan
+from .kaggle_parallel import suggest_reruns as kaggle_parallel_suggest_reruns
+from .kaggle_parallel import summarize_ledger as kaggle_parallel_summarize_ledger
 from .notebook_ops import list_registry, profile_submission, register_submission
 from .runner import run_experiment_file
 from .rna_ingest import ingest_result
@@ -129,6 +133,52 @@ def kaggle_notebook_minimap(
     console.print({"json": str(j), "markdown": str(m)})
 
 
+@app.command("kaggle-parallel-init")
+def kaggle_parallel_init(
+    profile: str = "three",
+    out: Path = Path("artifacts/kaggle_parallel/plan.yaml"),
+    notebooks_dir: Path = Path("notebooks/kaggle"),
+) -> None:
+    p = kaggle_parallel_init_plan(profile=profile, out=out, notebooks_dir=notebooks_dir)
+    console.print({"plan": str(p), "profile": profile})
+
+
+@app.command("kaggle-parallel-dispatch")
+def kaggle_parallel_dispatch_cmd(
+    plan: Path = Path("artifacts/kaggle_parallel/plan.yaml"),
+    workers: int = 3,
+    ledger: Path = Path("artifacts/kaggle_parallel/ledger.jsonl"),
+    logs_dir: Path = Path("logs/kaggle_parallel"),
+    executed_dir: Path = Path("artifacts/kaggle_parallel/executed"),
+) -> None:
+    out = kaggle_parallel_dispatch(
+        plan_path=plan,
+        concurrency=workers,
+        ledger_path=ledger,
+        logs_dir=logs_dir,
+        executed_dir=executed_dir,
+    )
+    console.print(out)
+
+
+@app.command("kaggle-parallel-status")
+def kaggle_parallel_status(
+    ledger: Path = Path("artifacts/kaggle_parallel/ledger.jsonl"),
+) -> None:
+    out = kaggle_parallel_summarize_ledger(ledger_path=ledger)
+    console.print(out)
+
+
+@app.command("kaggle-parallel-reruns")
+def kaggle_parallel_reruns(
+    ledger: Path = Path("artifacts/kaggle_parallel/ledger.jsonl"),
+    min_voi: float = 0.12,
+    limit: int = 12,
+) -> None:
+    out = kaggle_parallel_suggest_reruns(ledger_path=ledger, min_voi=min_voi, limit=limit)
+    console.print(out)
+
+
 @app.command("technique-list")
 def technique_list(path: Path = Path("catalogue/techniques/rna_notebook_techniques.yaml")) -> None:
     rows = load_techniques(path=path)
@@ -217,6 +267,8 @@ def submission_register(
     sequence: str = "",
     model: str = "unknown",
     run_id: str = "",
+    sample_idx: int = 1,
+    target_id: str = "",
     bridge_base: str = "http://127.0.0.1:19999",
 ) -> None:
     row = register_submission(
@@ -227,6 +279,8 @@ def submission_register(
         sequence=sequence,
         model=model,
         run_id=run_id,
+        sample_idx=sample_idx,
+        target_id=target_id,
         bridge_base=bridge_base,
     )
     console.print(row)

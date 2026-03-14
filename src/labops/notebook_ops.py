@@ -88,6 +88,8 @@ def register_submission(
     sequence: str,
     model: str,
     run_id: str,
+    sample_idx: int = 1,
+    target_id: str = "",
     bridge_base: str = "http://127.0.0.1:19999",
 ) -> dict[str, Any]:
     prof = profile_submission(submission_path)
@@ -98,7 +100,13 @@ def register_submission(
         out_root = Path("artifacts/rna_predictions")
         rid = run_id or f"run-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}"
         out_pdb = out_root / rid / "prediction.pdb"
-        ingest_result(input_path=submission_path, out_pdb=out_pdb, default_seq=sequence)
+        ingest_result(
+            input_path=submission_path,
+            out_pdb=out_pdb,
+            default_seq=sequence,
+            sample_idx=sample_idx,
+            target_id=target_id,
+        )
         ingested_pdb = str(out_pdb)
         viewer_url = f"{bridge_base.rstrip('/')}/{rid}/prediction.pdb"
 
@@ -120,6 +128,8 @@ def register_submission(
                 "created_at": _now(),
                 "source": str(submission_path),
                 "notebook_ref": notebook_ref,
+                "sample_idx": sample_idx,
+                "target_id": target_id,
             }
         )
         idx["predictions"] = preds

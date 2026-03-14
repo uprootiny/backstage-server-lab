@@ -3,10 +3,11 @@ from __future__ import annotations
 from pathlib import Path
 
 import orjson
-from kaggle.api.kaggle_api_extended import KaggleApi
 
 
 def sync_kaggle(out: Path, search: str = "", limit: int = 50) -> Path:
+    from kaggle.api.kaggle_api_extended import KaggleApi
+
     api = KaggleApi()
     api.authenticate()
 

@@ -13,6 +13,29 @@ It is a working lab runtime with five integrated surfaces:
 4. **Technique recomposition tools** (minimap + composition templates).
 5. **Repo observability** (GitHub exporter + Prometheus + Grafana).
 
+## Operator Console (Live)
+
+`kaggle-mashup` now acts as the **Research Observatory landing page** with unified tabs:
+
+1. `Pipeline` (10-stage ingest->normalize->visualize->compare->VOI)
+2. `Submission Registry` (breadcrumbed runs + compare-2 diff card)
+3. `Parallel Notebooks` (batch/ledger/rerun controls)
+4. `VOI Compass` (next-best-parameter guidance)
+5. `Operator Log` (live service traces)
+6. `Garden` (generative helix morphology map + data contract panel)
+
+Launch:
+
+```bash
+make kaggle-mashup
+```
+
+Default URL:
+
+```text
+http://127.0.0.1:8511
+```
+
 ## Core Idea
 
 Treat external notebooks as instruments that can be decomposed and recombined:
@@ -186,6 +209,15 @@ make submission-list
 This keeps a durable trail at:
 
 - `artifacts/notebook_submission_registry.jsonl`
+
+Parallel execution loop:
+
+```bash
+make kaggle-parallel-init PROFILE=three NOTEBOOKS_DIR=notebooks/starters
+make kaggle-parallel-dispatch WORKERS=3
+make kaggle-parallel-status
+make kaggle-parallel-reruns MIN_VOI=0.05 LIMIT=10
+```
 
 ## RNA Workbench + Bridge
 

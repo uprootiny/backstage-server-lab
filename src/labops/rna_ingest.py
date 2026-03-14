@@ -64,14 +64,86 @@ def _from_dataframe(df: pd.DataFrame, out: Path, default_seq: str = "") -> Path:
     return _rows_to_pdb(rows, out)
 
 
-def ingest_result(input_path: Path, out_pdb: Path, default_seq: str = "") -> Path:
+def _from_flattened_submission(df: pd.DataFrame, out: Path, default_seq: str = "", sample_idx: int = 1, target_id: str = "") -> Path:
+    cols = [str(c) for c in df.columns]
+    lower_to_real = {c.lower(): c for c in cols}
+
+    x_col = f"x_{sample_idx}"
+    y_col = f"y_{sample_idx}"
+    z_col = f"z_{sample_idx}"
+    if x_col not in lower_to_real or y_col not in lower_to_real or z_col not in lower_to_real:
+        raise ValueError(f"missing flattened coordinate columns for sample {sample_idx}: {x_col},{y_col},{z_col}")
+
+    id_col = lower_to_real.get("id", "")
+    resid_col = lower_to_real.get("resid", "")
+    resname_col = lower_to_real.get("resname", "")
+
+    work = df.copy()
+    if id_col and target_id:
+        work = work[work[id_col].astype(str) == str(target_id)]
+    elif id_col:
+        # Default to the first target for 3D viewer ingestion.
+        first_id = str(work.iloc[0][id_col]) if len(work) else ""
+        if first_id:
+            work = work[work[id_col].astype(str) == first_id]
+
+    rows: list[dict[str, Any]] = []
+    for i, row in work.reset_index(drop=True).iterrows():
+        if resid_col:
+            try:
+                resi = int(float(row[resid_col]))
+            except Exception:
+                resi = i + 1
+        else:
+            resi = i + 1
+
+        if resname_col:
+            rn = str(row[resname_col]).strip().upper()
+            if len(rn) == 1:
+                resn = _nt3(rn)
+            else:
+                resn = rn
+        else:
+            nt = default_seq[resi - 1] if default_seq and resi - 1 < len(default_seq) else "A"
+            resn = _nt3(nt)
+
+        rows.append(
+            {
+                "resi": resi,
+                "resn": resn,
+                "atom": "C1'",
+                "x": float(row[lower_to_real[x_col]]),
+                "y": float(row[lower_to_real[y_col]]),
+                "z": float(row[lower_to_real[z_col]]),
+                "b": 50.0,
+            }
+        )
+
+    if not rows:
+        raise ValueError("no rows after filtering flattened submission (check target_id)")
+    return _rows_to_pdb(rows, out)
+
+
+def ingest_result(
+    input_path: Path,
+    out_pdb: Path,
+    default_seq: str = "",
+    sample_idx: int = 1,
+    target_id: str = "",
+) -> Path:
     ext = input_path.suffix.lower()
     if ext == ".pdb":
         out_pdb.parent.mkdir(parents=True, exist_ok=True)
         out_pdb.write_text(input_path.read_text())
         return out_pdb
     if ext == ".csv":
-        return _from_dataframe(pd.read_csv(input_path), out_pdb, default_seq=default_seq)
+        df = pd.read_csv(input_path)
+        lc = {str(c).lower() for c in df.columns}
+        if {"x", "y", "z"}.issubset(lc):
+            return _from_dataframe(df, out_pdb, default_seq=default_seq)
+        if any(c.startswith("x_") for c in lc) and any(c.startswith("y_") for c in lc) and any(c.startswith("z_") for c in lc):
+            return _from_flattened_submission(df, out_pdb, default_seq=default_seq, sample_idx=sample_idx, target_id=target_id)
+        raise ValueError("csv unsupported: expected (x,y,z) or flattened (x_i,y_i,z_i) columns")
     if ext in {".json", ".jsonl"}:
         payload = json.loads(input_path.read_text())
         if isinstance(payload, dict) and "atoms" in payload and isinstance(payload["atoms"], list):

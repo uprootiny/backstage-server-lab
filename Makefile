@@ -39,8 +39,8 @@ submission-profile:
 	. .venv/bin/activate && labops submission-profile "$$INPUT"
 
 submission-register:
-	@if [[ -z "$$NOTEBOOK" || -z "$$INPUT" ]]; then echo "usage: make submission-register NOTEBOOK=user/notebook INPUT=/path/submission.csv [MARK=candidate] [BREADCRUMB=...] [SEQUENCE=...] [MODEL=...] [RUN_ID=...]"; exit 2; fi
-	. .venv/bin/activate && labops submission-register "$$NOTEBOOK" "$$INPUT" --mark "$${MARK:-candidate}" --breadcrumb "$${BREADCRUMB:-}" --sequence "$${SEQUENCE:-}" --model "$${MODEL:-unknown}" --run-id "$${RUN_ID:-}"
+	@if [[ -z "$$NOTEBOOK" || -z "$$INPUT" ]]; then echo "usage: make submission-register NOTEBOOK=user/notebook INPUT=/path/submission.csv [MARK=candidate] [BREADCRUMB=...] [SEQUENCE=...] [MODEL=...] [RUN_ID=...] [SAMPLE_IDX=1] [TARGET_ID=...]"; exit 2; fi
+	. .venv/bin/activate && labops submission-register "$$NOTEBOOK" "$$INPUT" --mark "$${MARK:-candidate}" --breadcrumb "$${BREADCRUMB:-}" --sequence "$${SEQUENCE:-}" --model "$${MODEL:-unknown}" --run-id "$${RUN_ID:-}" --sample-idx "$${SAMPLE_IDX:-1}" --target-id "$${TARGET_ID:-}"
 
 submission-list:
 	. .venv/bin/activate && labops submission-list
@@ -65,6 +65,18 @@ technique-list:
 technique-compose:
 	@if [[ -z "$$IDS" ]]; then echo "usage: make technique-compose IDS=tbm_ensemble,recycling_refinement,confidence_calibration"; exit 2; fi
 	. .venv/bin/activate && labops technique-compose "$$IDS"
+
+kaggle-parallel-init:
+	. .venv/bin/activate && labops kaggle-parallel-init --profile "$${PROFILE:-three}" --out "$${PLAN:-artifacts/kaggle_parallel/plan.yaml}" --notebooks-dir "$${NOTEBOOKS_DIR:-notebooks/kaggle}"
+
+kaggle-parallel-dispatch:
+	. .venv/bin/activate && labops kaggle-parallel-dispatch --plan "$${PLAN:-artifacts/kaggle_parallel/plan.yaml}" --workers "$${WORKERS:-3}" --ledger "$${LEDGER:-artifacts/kaggle_parallel/ledger.jsonl}" --logs-dir "$${LOGS_DIR:-logs/kaggle_parallel}" --executed-dir "$${EXECUTED_DIR:-artifacts/kaggle_parallel/executed}"
+
+kaggle-parallel-status:
+	. .venv/bin/activate && labops kaggle-parallel-status --ledger "$${LEDGER:-artifacts/kaggle_parallel/ledger.jsonl}"
+
+kaggle-parallel-reruns:
+	. .venv/bin/activate && labops kaggle-parallel-reruns --ledger "$${LEDGER:-artifacts/kaggle_parallel/ledger.jsonl}" --min-voi "$${MIN_VOI:-0.12}" --limit "$${LIMIT:-12}"
 
 obs-setup:
 	bash scripts/setup_repo_observability.sh

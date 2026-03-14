@@ -7,7 +7,6 @@ from typing import Any
 import json
 
 import orjson
-from kaggle.api.kaggle_api_extended import KaggleApi
 
 
 SEED_ROWS = Path("data/seeds/kaggle_rna_seed_rows.json")
@@ -26,6 +25,8 @@ TAG_RULES: list[tuple[str, list[str]]] = [
 
 
 def _fetch_notebooks(search: str, limit: int) -> list[dict[str, Any]]:
+    from kaggle.api.kaggle_api_extended import KaggleApi
+
     api = KaggleApi()
     api.authenticate()
     rows = list(api.kernels_list(search=search))[:limit]
