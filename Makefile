@@ -106,6 +106,9 @@ obs-probe:
 ci-secrets-instrument:
 	uv run python scripts/ci/instrument_secrets.py
 
+ci-vast-instrument:
+	uv run python scripts/ci/instrument_vast.py
+
 tb:
 	. .venv/bin/activate && tensorboard --logdir artifacts --host 0.0.0.0 --port 6006
 
