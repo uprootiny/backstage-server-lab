@@ -19,4 +19,4 @@ except Exception as e:
 PY
 
 echo "== Ports =="
-ss -ltn | grep -E ':1111|:6006' || true
+ss -ltn | grep -E ':1111|:6006|:8511|:19999' || true

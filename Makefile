@@ -13,6 +13,9 @@ down:
 sanity:
 	bash scripts/sanity.sh
 
+doctor:
+	bash scripts/connection_doctor.sh
+
 train-stub:
 	. .venv/bin/activate && python -m src.train_stub --config configs/exp1.yaml
 
@@ -24,6 +27,13 @@ graph:
 
 kaggle-mashup:
 	. .venv/bin/activate && bash scripts/run_kaggle_mashup.sh
+
+rna-bridge:
+	bash scripts/start_rna_artifact_bridge.sh
+
+rna-register:
+	@if [[ -z "$$PDB" ]]; then echo "usage: make rna-register PDB=/path/prediction.pdb [RUN_ID=...] [SEQUENCE=...] [MODEL=...]"; exit 2; fi
+	bash scripts/register_rna_prediction.sh "$$PDB" "$${RUN_ID:-}" "$${SEQUENCE:-unknown}" "$${MODEL:-unknown}"
 
 tb:
 	. .venv/bin/activate && tensorboard --logdir artifacts --host 0.0.0.0 --port 6006

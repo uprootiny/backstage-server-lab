@@ -33,6 +33,7 @@ cd backstage-server-lab
 make up
 make train-stub
 make bench
+make doctor
 make down
 ```
 
@@ -77,6 +78,23 @@ Open:
 
 Requires Kaggle auth (`~/.kaggle/kaggle.json` or `KAGGLE_USERNAME` + `KAGGLE_KEY`).
 
+## RNA prediction bridge (workbench input path)
+
+Serve prediction artifacts for external workbenches/3D viewers:
+
+```bash
+make rna-bridge
+make rna-register PDB=/path/to/prediction.pdb RUN_ID=exp42 SEQUENCE=AUGC MODEL=baseline-v1
+```
+
+Bridge index:
+
+- `http://<host>:19999/index.json`
+
+Prediction URL shape:
+
+- `http://<host>:19999/<run_id>/prediction.pdb`
+
 ## Layout
 
 - `scripts/` setup and service management
@@ -91,3 +109,4 @@ Requires Kaggle auth (`~/.kaggle/kaggle.json` or `KAGGLE_USERNAME` + `KAGGLE_KEY
 - If the Vast instance has no attached volume, treat local state as ephemeral.
 - Use `make sync DEST=user@host:/path/backup` frequently.
 - Operator runbook: `docs/GPU_WORKER_OPERATIONS.md`
+- Connectivity report: `docs/CONNECTION_DOCTOR.md` via `make doctor`
