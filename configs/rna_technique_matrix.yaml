@@ -1,0 +1,81 @@
+version: 1
+profile: rna_technique_matrix_v1
+job_budget: 24
+repeats: 2
+default_timeout_min: 40
+
+datasets:
+  - id: stanford_rna_3d_kaggle
+    url: https://www.kaggle.com/competitions/stanford-rna-3d-folding-part-2
+    weight: 1.0
+  - id: rna_puzzles
+    url: https://www.rnapuzzles.org/
+    weight: 0.6
+  - id: bp_rna
+    url: https://bprna.cgrb.oregonstate.edu/
+    weight: 0.5
+
+notebooks:
+  protenix_anchor: notebooks/kaggle/sigmaborov-top1/stanford-rna-3d-folding-top-1-solution.local.ipynb
+  training_filled: notebooks/starters/02_rna_3d_training_filled.ipynb
+  eval_bridge: notebooks/starters/03_rna_eval_workbench_bridge.ipynb
+
+technique_baselines:
+  - id: baseline_reliable
+    notebook_ref: training_filled
+    timeout_min: 35
+    expected_improvement: 0.14
+    uncertainty: 0.55
+    importance: 0.86
+    params:
+      profile: baseline_reliable
+      recycle_steps: 4
+      use_template: false
+      seed_count: 1
+      validation_spec: family_dropout_v1
+    perturbations:
+      - id: p_recycle_6
+        params:
+          recycle_steps: 6
+      - id: p_seed_3
+        params:
+          seed_count: 3
+
+  - id: high_score_pragmatic
+    notebook_ref: protenix_anchor
+    timeout_min: 55
+    expected_improvement: 0.24
+    uncertainty: 0.68
+    importance: 0.94
+    params:
+      profile: high_score_pragmatic
+      recycle_steps: 8
+      use_template: true
+      seed_count: 4
+      validation_spec: family_dropout_v1
+    perturbations:
+      - id: p_template_off
+        params:
+          use_template: false
+      - id: p_recycle_10
+        params:
+          recycle_steps: 10
+
+  - id: insight_maximizer
+    notebook_ref: eval_bridge
+    timeout_min: 30
+    expected_improvement: 0.16
+    uncertainty: 0.62
+    importance: 0.88
+    params:
+      profile: insight_maximizer
+      delta_threshold: 0.25
+      motif_set: default
+      validation_spec: temporal_family_mix_v1
+    perturbations:
+      - id: p_delta_030
+        params:
+          delta_threshold: 0.30
+      - id: p_delta_020
+        params:
+          delta_threshold: 0.20
