@@ -26,8 +26,50 @@ make sanity
 cd backstage-server-lab
 make up
 make train-stub
+make bench
 make down
 ```
+
+## Validation Bench (Python + uv/uvx style)
+
+This repo now includes a hypothesis-driven validation bench with:
+
+- 3 variants in parallel
+- parameter wiggle exploration
+- hypothesis + VOI tracking
+- validation gates
+- thesis/result graph export with Kaggle/paper references
+
+Run:
+
+```bash
+bash scripts/run_validation_bench.sh hypothesis-demo
+```
+
+Core commands:
+
+```bash
+labops formulate --hypothesis-id hyp-1 --statement "..." --question "..." --voi-prior 0.7 --kaggle-ref playground-series --paper-ref https://arxiv.org/abs/1810.04805
+labops run-bench --hypothesis-id hyp-1 --config configs/validation_bench.yaml --workers 3
+labops validate --min-metric 0.70
+labops graph --out artifacts/thesis_graph.json
+```
+
+See: `docs/MLOPS_VALIDATION_BENCH.md`
+
+## Kaggle Mashup UI
+
+A mashup UI to sort/filter competitions/challenges and datasets:
+
+```bash
+bash scripts/run_kaggle_mashup.sh
+```
+
+Open:
+
+- `http://<host>:8511`
+
+Requires Kaggle auth (`~/.kaggle/kaggle.json` or `KAGGLE_USERNAME` + `KAGGLE_KEY`).
 
 ## Layout
 

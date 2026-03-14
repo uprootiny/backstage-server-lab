@@ -1,0 +1,25 @@
+base:
+  lr: 0.001
+  batch_size: 16
+  regularization: 0.1
+  voi_weight: 1.0
+
+variants:
+  baseline:
+    lr: 0.001
+    batch_size: 16
+    regularization: 0.10
+    voi_weight: 1.0
+  high-lr:
+    lr: 0.01
+    batch_size: 16
+    regularization: 0.10
+    voi_weight: 0.9
+  large-batch:
+    lr: 0.001
+    batch_size: 64
+    regularization: 0.08
+    voi_weight: 1.1
+
+validation:
+  min_metric: 0.70

@@ -16,6 +16,15 @@ sanity:
 train-stub:
 	. .venv/bin/activate && python -m src.train_stub --config configs/exp1.yaml
 
+bench:
+	. .venv/bin/activate && bash scripts/run_validation_bench.sh hypothesis-demo
+
+graph:
+	. .venv/bin/activate && labops graph --out artifacts/thesis_graph.json
+
+kaggle-mashup:
+	. .venv/bin/activate && bash scripts/run_kaggle_mashup.sh
+
 tb:
 	. .venv/bin/activate && tensorboard --logdir artifacts --host 0.0.0.0 --port 6006
 
