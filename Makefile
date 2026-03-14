@@ -87,6 +87,10 @@ notebook-interactive:
 notebook-clickthrough:
 	bash scripts/clickthrough_notebook_fabric.sh
 
+notebook-extract:
+	@if [[ -z "$$NOTEBOOK" ]]; then echo "usage: make notebook-extract NOTEBOOK=notebooks/starters/02_rna_3d_training_filled.ipynb [OUT=artifacts/notebook_pipelines]"; exit 2; fi
+	. .venv/bin/activate && labops notebook-extract-pipeline "$$NOTEBOOK" --out-dir "$${OUT:-artifacts/notebook_pipelines}"
+
 obs-setup:
 	bash scripts/setup_repo_observability.sh
 
@@ -98,6 +102,9 @@ obs-down:
 
 obs-probe:
 	bash scripts/probe_live_endpoints.sh
+
+ci-secrets-instrument:
+	uv run python scripts/ci/instrument_secrets.py
 
 tb:
 	. .venv/bin/activate && tensorboard --logdir artifacts --host 0.0.0.0 --port 6006
