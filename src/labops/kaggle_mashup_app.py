@@ -53,6 +53,12 @@ VAST_PORT_MAP = [
 ]
 
 JUPYTER_BASE_URL = "https://175.155.64.231:19808"
+TENSORBOARD_URL = "http://175.155.64.231:19448"
+TB_RUN_ROOTS = [
+    Path("/workspace/logs/rna"),
+    Path("/tmp/rna_tb"),
+    Path("artifacts/tensorboard"),
+]
 
 
 @dataclass
@@ -434,6 +440,37 @@ def _http_code(url: str, timeout: float = 4.0) -> int:
             return int(getattr(r, "status", 0) or 0)
     except Exception:
         return 0
+
+
+def discover_tensorboard_runs(max_runs: int = 80) -> pd.DataFrame:
+    rows: list[dict[str, Any]] = []
+    for root in TB_RUN_ROOTS:
+        if not root.exists():
+            continue
+        for ev in root.glob("**/events.out.tfevents.*"):
+            run_dir = ev.parent
+            run_name = run_dir.name
+            rel_dir = str(run_dir)
+            try:
+                size_kb = round(ev.stat().st_size / 1024, 1)
+                mtime = datetime.fromtimestamp(ev.stat().st_mtime, tz=timezone.utc).isoformat().replace("+00:00", "Z")
+            except Exception:
+                size_kb = 0.0
+                mtime = ""
+            rows.append(
+                {
+                    "run_name": run_name,
+                    "event_file": str(ev),
+                    "run_dir": rel_dir,
+                    "size_kb": size_kb,
+                    "updated_utc": mtime,
+                    "open_tensorboard": TENSORBOARD_URL,
+                }
+            )
+    if not rows:
+        return pd.DataFrame()
+    df = pd.DataFrame(rows).sort_values(["updated_utc", "size_kb"], ascending=[False, False]).head(max_runs)
+    return df.reset_index(drop=True)
 
 
 def inject_theme() -> None:
@@ -1002,6 +1039,22 @@ def render_parallel_tab() -> None:
     h2.metric("job_end", int(health["job_end_count"]))
     h3.metric("ok", int(health["ok"]))
     h4.metric("failed", int(health["failed"]))
+
+    st.markdown("### TensorBoard run evidence")
+    tb_df = discover_tensorboard_runs()
+    if tb_df.empty:
+        st.info("No TensorBoard event files found yet. Start logging and refresh.")
+    else:
+        st.dataframe(
+            tb_df,
+            use_container_width=True,
+            height=220,
+            column_config={"open_tensorboard": st.column_config.LinkColumn("Open TensorBoard")},
+        )
+    tb_a, tb_b = st.columns([1, 2])
+    tb_a.link_button("Open TensorBoard", TENSORBOARD_URL, use_container_width=True)
+    if tb_df.empty:
+        tb_b.code("bash scripts/start_tensorboard.sh /workspace/logs/rna", language="bash")
     if health["latest_run_end"]:
         st.caption(f"latest run_end: `{health['latest_run_end'].get('run_id','')}`")
         lhs, rhs = st.columns([1, 1])
@@ -1543,11 +1596,11 @@ def render_sources_tab() -> None:
     st.markdown("### Actions")
     a1, a2 = st.columns(2)
     if a1.button("Run notebook source pull"):
-        out = run_local_command(["python", "scripts/pull_notebook_sources.py"])
+        out = run_local_command(["uv", "run", "python", "scripts/pull_notebook_sources.py"])
         st.code((out.get("stdout", "") + "\n" + out.get("stderr", "")).strip()[:6000], language="text")
         emit_event("sources.pull", "sources_tab", f"ok={out.get('ok')} rc={out.get('returncode')}")
     if a2.button("Run top notebook analysis"):
-        out = run_local_command(["python", "scripts/analyze_top_kaggle_notebooks.py"])
+        out = run_local_command(["uv", "run", "python", "scripts/analyze_top_kaggle_notebooks.py"])
         st.code((out.get("stdout", "") + "\n" + out.get("stderr", "")).strip()[:6000], language="text")
         emit_event("sources.analyze", "sources_tab", f"ok={out.get('ok')} rc={out.get('returncode')}")
 
@@ -1585,7 +1638,7 @@ def render_ops_tab() -> None:
         ("Observatory tunnel", OBS_TUNNEL_URL),
         ("Grafana", GRAFANA_URL),
         ("Vast Jupyter", "https://175.155.64.231:19808"),
-        ("Vast TensorBoard", "http://175.155.64.231:19448"),
+        ("Vast TensorBoard", TENSORBOARD_URL),
     ]
     rows = []
     for name, url in urls:
@@ -1604,6 +1657,30 @@ def render_ops_tab() -> None:
             )
     else:
         gcol2.info("Grafana is down. Use start observability stack action.")
+    st.markdown("### TensorBoard")
+    tcol1, tcol2 = st.columns([1, 1])
+    tcol1.link_button("Open TensorBoard", TENSORBOARD_URL, use_container_width=True)
+    tb_probe = _http_code(TENSORBOARD_URL)
+    tcol2.metric("TensorBoard HTTP", tb_probe)
+    if tb_probe in (200, 401, 403):
+        with st.expander("TensorBoard inline", expanded=False):
+            components.html(
+                f"<iframe src='{TENSORBOARD_URL}' width='100%' height='620' style='border:0'></iframe>",
+                height=640,
+                scrolling=True,
+            )
+    else:
+        st.code("bash scripts/start_tensorboard.sh /workspace/logs/rna", language="bash")
+    tb_df = discover_tensorboard_runs()
+    if not tb_df.empty:
+        st.dataframe(
+            tb_df.head(40),
+            use_container_width=True,
+            height=240,
+            column_config={"open_tensorboard": st.column_config.LinkColumn("Open TensorBoard")},
+        )
+    else:
+        st.info("No local TensorBoard event files discovered yet.")
     if st.button("Refresh probes"):
         st.rerun()
     if st.button("Start repo observability stack"):
@@ -1724,7 +1801,7 @@ def render_open_datasets_tab() -> None:
     st.code(
         "\n".join(
             [
-                "python scripts/analyze_top_kaggle_notebooks.py",
+                "uv run python scripts/analyze_top_kaggle_notebooks.py",
                 "make notebook-pull",
                 "make notebook-clickthrough",
             ]
