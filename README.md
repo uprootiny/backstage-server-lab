@@ -13,7 +13,7 @@ A clone-friendly, single-node ML/dev workspace optimized for Vast.ai Jupyter box
 ## Quick start (on Vast / Jupyter terminal)
 
 ```bash
-git clone <YOUR_REMOTE_URL> backstage-server-lab
+git clone https://github.com/uprootiny/backstage-server-lab.git backstage-server-lab
 cd backstage-server-lab
 bash scripts/bootstrap.sh
 make up

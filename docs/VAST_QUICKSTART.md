@@ -3,7 +3,7 @@
 ## Clone and bootstrap
 
 ```bash
-bash scripts/vast_clone_bootstrap.sh <YOUR_REMOTE_URL> /workspace/backstage-server-lab
+bash scripts/vast_clone_bootstrap.sh https://github.com/uprootiny/backstage-server-lab.git /workspace/backstage-server-lab
 ```
 
 ## Service endpoints
