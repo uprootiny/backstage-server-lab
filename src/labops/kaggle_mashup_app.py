@@ -9,6 +9,7 @@ import subprocess
 import time
 from pathlib import Path
 import sys
+import os
 from typing import Any
 from urllib.request import urlopen
 
@@ -42,19 +43,26 @@ VISUALS_DIR = Path("docs/assets")
 PIPELINE_RUNS_PATH = Path("artifacts/pipeline_runs.jsonl")
 HYPOTHESES_PATH = Path("artifacts/hypotheses_shelf.json")
 GARDEN_STATE_PATH = Path("artifacts/garden_state.json")
-GRAFANA_URL = "http://173.212.203.211:19300"
-OBS_TUNNEL_URL = "https://generous-ladder-twins-sims.trycloudflare.com"
+VAST_PUBLIC_IP = os.getenv("VAST_PUBLIC_IP", "175.155.64.231")
+VAST_SSH_PORT = os.getenv("VAST_SSH_PORT", "19636")
+VAST_JUPYTER_PORT = os.getenv("VAST_JUPYTER_PORT", "19808")
+VAST_PORTAL_PORT = os.getenv("VAST_PORTAL_PORT", "19121")
+VAST_TENSORBOARD_PORT = os.getenv("VAST_TENSORBOARD_PORT", "19448")
+VAST_SYNCTHING_PORT = os.getenv("VAST_SYNCTHING_PORT", "19753")
+VAST_OPEN_PORT = os.getenv("VAST_OPEN_PORT", "19842")
+GRAFANA_URL = os.getenv("GRAFANA_URL", "http://127.0.0.1:19300")
+OBS_TUNNEL_URL = os.getenv("OBS_TUNNEL_URL", "")
 VAST_PORT_MAP = [
-    ("SSH", "175.155.64.231:19636 -> 22/tcp"),
-    ("Jupyter", "175.155.64.231:19808 -> 8080/tcp"),
-    ("Portal", "175.155.64.231:19121 -> 1111/tcp"),
-    ("TensorBoard", "175.155.64.231:19448 -> 6006/tcp"),
-    ("Syncthing", "175.155.64.231:19753 -> 8384/tcp"),
-    ("Open 19842", "175.155.64.231:19842 -> 19842/tcp"),
+    ("SSH", f"{VAST_PUBLIC_IP}:{VAST_SSH_PORT} -> 22/tcp"),
+    ("Jupyter", f"{VAST_PUBLIC_IP}:{VAST_JUPYTER_PORT} -> 8080/tcp"),
+    ("Portal", f"{VAST_PUBLIC_IP}:{VAST_PORTAL_PORT} -> 1111/tcp"),
+    ("TensorBoard", f"{VAST_PUBLIC_IP}:{VAST_TENSORBOARD_PORT} -> 6006/tcp"),
+    ("Syncthing", f"{VAST_PUBLIC_IP}:{VAST_SYNCTHING_PORT} -> 8384/tcp"),
+    ("Open", f"{VAST_PUBLIC_IP}:{VAST_OPEN_PORT} -> dynamic"),
 ]
 
-JUPYTER_BASE_URL = "https://175.155.64.231:19808"
-TENSORBOARD_URL = "http://175.155.64.231:19448"
+JUPYTER_BASE_URL = os.getenv("JUPYTER_BASE_URL", f"https://{VAST_PUBLIC_IP}:{VAST_JUPYTER_PORT}")
+TENSORBOARD_URL = os.getenv("TENSORBOARD_URL", f"http://{VAST_PUBLIC_IP}:{VAST_TENSORBOARD_PORT}")
 TB_RUN_ROOTS = [
     Path("/workspace/logs/rna"),
     Path("/tmp/rna_tb"),
@@ -1234,7 +1242,7 @@ def render_parallel_tab() -> None:
                 if str(row.get("output_notebook", "")).strip():
                     cB.link_button("Open executed", _nb_url(str(row.get("output_notebook", ""))), use_container_width=True)
                 if str(row.get("log", "")).strip():
-                    cC.link_button("Open run fabric tab", "http://175.155.64.231:19448", use_container_width=True)
+                    cC.link_button("Open run fabric tab", TENSORBOARD_URL, use_container_width=True)
                 st.json(
                     {
                         "run_id": row.get("run_id"),
@@ -1719,7 +1727,7 @@ def render_ops_tab() -> None:
     urls = [
         ("Observatory tunnel", OBS_TUNNEL_URL),
         ("Grafana", GRAFANA_URL),
-        ("Vast Jupyter", "https://175.155.64.231:19808"),
+        ("Vast Jupyter", JUPYTER_BASE_URL),
         ("Vast TensorBoard", TENSORBOARD_URL),
     ]
     rows = []
@@ -1781,7 +1789,7 @@ def render_ops_tab() -> None:
     st.code(
         "\n".join(
             [
-                "ssh -i ~/.ssh/gpu_orchestra_ed25519 -p 19636 root@175.155.64.231",
+                f"ssh -i ~/.ssh/gpu_orchestra_ed25519 -p {VAST_SSH_PORT} root@{VAST_PUBLIC_IP}",
                 "cd /workspace/backstage-server-lab",
                 "pkill -f 'streamlit run src/labops/kaggle_mashup_app.py' || true",
                 "nohup /venv/main/bin/streamlit run src/labops/kaggle_mashup_app.py --server.port 8520 --server.address 0.0.0.0 --server.headless true >/workspace/logs/observatory-8520.log 2>&1 &",
@@ -1859,6 +1867,68 @@ def render_top_notebooks_tab() -> None:
                 out = run_local_command(["bash", "-lc", str(row.get("repro_cmd", ""))], timeout_sec=900)
                 st.code((out.get("stdout", "") + "\n" + out.get("stderr", "")).strip()[:7000], language="text")
                 emit_event("top_notebook.repro", "top_notebooks_tab", f"ok={out.get('ok')} ref={chosen}")
+            st.markdown("### Dispatch to run fabric")
+            d1, d2, d3 = st.columns(3)
+            queue_profile = d1.selectbox(
+                "Queue profile",
+                options=["top_notebook_repro", "smoke", "stress", "ablation"],
+                index=0,
+                key=f"profile_{chosen}",
+            )
+            queue_workers = int(
+                d2.number_input(
+                    "Workers hint",
+                    min_value=1,
+                    max_value=16,
+                    value=3,
+                    step=1,
+                    key=f"workers_{chosen}",
+                )
+            )
+            queue_priority = int(
+                d3.number_input(
+                    "Priority",
+                    min_value=1,
+                    max_value=100,
+                    value=75,
+                    step=1,
+                    key=f"priority_{chosen}",
+                )
+            )
+            notebook_target = str(row.get("local_path", "")).strip() or str(row.get("ref", "")).strip()
+            st.code(
+                json.dumps(
+                    {
+                        "notebook_target": notebook_target,
+                        "profile": queue_profile,
+                        "workers_hint": queue_workers,
+                        "priority": queue_priority,
+                        "ref": chosen,
+                    },
+                    indent=2,
+                ),
+                language="json",
+            )
+            if st.button("Enqueue selected notebook", key=f"enqueue_{chosen}"):
+                enqueue_manual_dispatch(
+                    {
+                        "kind": "top_notebook_enqueue",
+                        "source": "top_notebooks_tab",
+                        "notebook": notebook_target,
+                        "profile": queue_profile,
+                        "workers_hint": queue_workers,
+                        "priority": queue_priority,
+                        "ref": chosen,
+                        "title": str(row.get("title", "")),
+                        "repro_cmd": str(row.get("repro_cmd", "")),
+                    }
+                )
+                emit_event(
+                    "top_notebook.enqueue",
+                    "top_notebooks_tab",
+                    f"queued ref={chosen} notebook={notebook_target} profile={queue_profile} workers={queue_workers}",
+                )
+                st.success("Queued to manual run-fabric queue. Apply queue in Run Fabric tab.")
     if TOP_NOTEBOOK_DIGEST_PATH.exists():
         with st.expander("Digest markdown", expanded=False):
             st.markdown(TOP_NOTEBOOK_DIGEST_PATH.read_text())
