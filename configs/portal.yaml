@@ -1,0 +1,67 @@
+applications:
+  Instance Portal:
+    hostname: localhost
+    external_port: 1111
+    internal_port: 11111
+    open_path: /
+    name: Instance Portal
+  Jupyter:
+    hostname: localhost
+    external_port: 8080
+    internal_port: 8080
+    open_path: /
+    name: Jupyter
+  Jupyter Terminal:
+    hostname: localhost
+    external_port: 8080
+    internal_port: 8080
+    open_path: /terminals/1
+    name: Jupyter Terminal
+  Syncthing:
+    hostname: localhost
+    external_port: 8384
+    internal_port: 18384
+    open_path: /
+    name: Syncthing
+  Tensorboard:
+    hostname: localhost
+    external_port: 6006
+    internal_port: 16006
+    open_path: /
+    name: Tensorboard
+  MLOps Hub:
+    hostname: localhost
+    external_port: 8525
+    internal_port: 8525
+    open_path: /
+    name: MLOps Hub
+  MLOps Lab:
+    hostname: localhost
+    external_port: 8523
+    internal_port: 8523
+    open_path: /
+    name: MLOps Lab
+  Grafana:
+    hostname: localhost
+    external_port: 3000
+    internal_port: 3000
+    open_path: /
+    name: Grafana
+  Prometheus:
+    hostname: localhost
+    external_port: 9090
+    internal_port: 9090
+    open_path: /
+    name: Prometheus
+  Validation Harness:
+    hostname: localhost
+    external_port: 8522
+    internal_port: 8522
+    open_path: /
+    name: Validation Harness
+  Notebook Lab:
+    hostname: localhost
+    external_port: 8521
+    internal_port: 8521
+    open_path: /
+    name: Notebook Lab
