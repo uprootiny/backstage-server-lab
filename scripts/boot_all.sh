@@ -30,16 +30,21 @@ echo "→ Starting Validation Dashboard..."
 PYTHONPATH=src nohup python3 -m labops.validation_harness --molecules 40 --serve --port 8522 > /workspace/logs/validation.log 2>&1 &
 echo "  validation dashboard started (:8522)"
 
-# 5. MLOps Lab UI
-echo "→ Starting MLOps Lab..."
+# 5. MLOps Lab UI (Streamlit)
+echo "→ Starting MLOps Lab (Streamlit)..."
 PYTHONPATH=src nohup streamlit run src/labops/mlops_lab_app.py --server.port 8523 --server.address 0.0.0.0 --server.headless true > /workspace/logs/mlops_lab.log 2>&1 &
 echo "  mlops lab started (:8523)"
+
+# 5b. MLOps Hub (FastAPI + Chart.js dashboard)
+echo "→ Starting MLOps Hub..."
+nohup python3 web/mlops-hub/app.py > /workspace/logs/mlops_hub.log 2>&1 &
+echo "  mlops hub started (:8525)"
 
 # 6. Verify
 sleep 8
 echo ""
 echo "=== Service Health ==="
-for name_port in "Streamlit:1111" "TensorBoard:6006" "Grafana:3000" "Portal:8520" "NotebookLab:8521" "Validation:8522" "MLOpsLab:8523" "Prometheus:9090"; do
+for name_port in "Streamlit:1111" "TensorBoard:6006" "Grafana:3000" "Portal:8520" "NotebookLab:8521" "Validation:8522" "MLOpsLab:8523" "MLOpsHub:8525" "Prometheus:9090"; do
     n=${name_port%%:*}; p=${name_port##*:}
     code=$(curl -sf -o /dev/null -w '%{http_code}' --max-time 3 "http://localhost:$p/" 2>/dev/null || echo "---")
     printf "  %-14s :%-5s %s\n" "$n" "$p" "$code"

@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MLOps Hub — RNA 3D Research Lab</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<style>
+:root {
+  --bg: #0a0e14; --bg2: #0f1520; --bg3: #141c28;
+  --fg: #c8d6e5; --fg2: #8899aa; --fg3: #556677;
+  --accent: #00ff88; --accent2: #00ccff; --warn: #ffaa00; --err: #ff4466;
+  --border: #1a2a3a; --card: #111a24;
+  --font: 'SF Mono', 'Cascadia Code', 'Fira Code', 'JetBrains Mono', monospace;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); font-family: var(--font); font-size: 13px; }
+a { color: var(--accent2); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* Layout */
+.shell { display: flex; height: 100vh; overflow: hidden; }
+.sidebar { width: 220px; min-width: 220px; background: var(--bg2); border-right: 1px solid var(--border); display: flex; flex-direction: column; }
+.sidebar-hdr { padding: 16px; border-bottom: 1px solid var(--border); }
+.sidebar-hdr h1 { font-size: 14px; color: var(--accent); margin-bottom: 4px; letter-spacing: 1px; }
+.sidebar-hdr .sub { font-size: 11px; color: var(--fg2); }
+.nav { flex: 1; overflow-y: auto; padding: 8px 0; }
+.nav-item { display: flex; align-items: center; gap: 8px; padding: 10px 16px; cursor: pointer; color: var(--fg2); transition: all 0.15s; border-left: 3px solid transparent; }
+.nav-item:hover { background: var(--bg3); color: var(--fg); }
+.nav-item.active { background: var(--bg3); color: var(--accent); border-left-color: var(--accent); }
+.nav-item .icon { font-size: 16px; width: 20px; text-align: center; }
+.nav-item .label { font-size: 12px; }
+.sidebar-footer { padding: 12px 16px; border-top: 1px solid var(--border); font-size: 10px; color: var(--fg3); }
+
+/* Main */
+.main { flex: 1; overflow-y: auto; display: flex; flex-direction: column; }
+.topbar { display: flex; align-items: center; justify-content: space-between; padding: 12px 24px; border-bottom: 1px solid var(--border); background: var(--bg2); min-height: 48px; }
+.topbar h2 { font-size: 15px; color: var(--fg); font-weight: 500; }
+.topbar .actions { display: flex; gap: 8px; }
+.btn { padding: 6px 14px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg3); color: var(--fg); cursor: pointer; font-size: 11px; font-family: var(--font); transition: all 0.15s; }
+.btn:hover { border-color: var(--accent); color: var(--accent); }
+.btn.primary { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+.content { flex: 1; padding: 20px 24px; overflow-y: auto; }
+
+/* Cards */
+.card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+.card h3 { font-size: 13px; color: var(--accent); margin-bottom: 12px; font-weight: 500; }
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+.grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+
+/* Metrics */
+.metric { text-align: center; padding: 12px; }
+.metric .value { font-size: 28px; font-weight: 700; color: var(--accent); }
+.metric .label { font-size: 10px; color: var(--fg2); margin-top: 4px; text-transform: uppercase; letter-spacing: 1px; }
+.metric.warn .value { color: var(--warn); }
+.metric.err .value { color: var(--err); }
+
+/* Progress bar */
+.pbar { height: 6px; background: var(--bg); border-radius: 3px; overflow: hidden; margin-top: 8px; }
+.pbar .fill { height: 100%; border-radius: 3px; transition: width 0.5s; }
+.pbar .fill.ok { background: var(--accent); }
+.pbar .fill.warn { background: var(--warn); }
+.pbar .fill.err { background: var(--err); }
+
+/* Service badges */
+.svc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
+.svc { display: flex; align-items: center; gap: 8px; padding: 10px 12px; background: var(--bg2); border: 1px solid var(--border); border-radius: 6px; }
+.svc .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.svc .dot.up { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+.svc .dot.down { background: var(--err); box-shadow: 0 0 6px var(--err); }
+.svc .info { flex: 1; }
+.svc .name { font-size: 11px; font-weight: 600; }
+.svc .port { font-size: 10px; color: var(--fg3); }
+
+/* Timeline */
+.tl-event { display: flex; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 12px; }
+.tl-event:last-child { border-bottom: none; }
+.tl-ts { color: var(--fg3); min-width: 140px; font-size: 11px; }
+.tl-kind { min-width: 120px; }
+.tl-kind span { padding: 2px 6px; border-radius: 3px; font-size: 10px; }
+.tl-kind .info { background: #0a2a1a; color: var(--accent); }
+.tl-kind .warning { background: #2a2a0a; color: var(--warn); }
+.tl-kind .error { background: #2a0a0a; color: var(--err); }
+.tl-msg { flex: 1; color: var(--fg); }
+.tl-src { color: var(--fg3); font-size: 10px; min-width: 80px; text-align: right; }
+
+/* Journal */
+.journal-section { margin-bottom: 12px; }
+.journal-hdr { padding: 10px 12px; background: var(--bg2); border: 1px solid var(--border); border-radius: 6px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
+.journal-hdr:hover { border-color: var(--accent2); }
+.journal-hdr .title { font-size: 13px; font-weight: 600; }
+.journal-hdr .arrow { color: var(--fg3); transition: transform 0.2s; }
+.journal-hdr.open .arrow { transform: rotate(90deg); }
+.journal-body { padding: 12px 16px; border: 1px solid var(--border); border-top: none; border-radius: 0 0 6px 6px; background: var(--bg3); display: none; }
+.journal-body.open { display: block; }
+.journal-body h3 { color: var(--accent2); margin: 12px 0 6px; font-size: 12px; }
+.journal-body p, .journal-body li { font-size: 12px; line-height: 1.6; }
+.journal-body code { background: var(--bg); padding: 1px 4px; border-radius: 3px; font-size: 11px; }
+.journal-body pre { background: var(--bg); padding: 10px; border-radius: 4px; overflow-x: auto; margin: 8px 0; font-size: 11px; }
+.journal-body table { width: 100%; border-collapse: collapse; margin: 8px 0; }
+.journal-body th, .journal-body td { padding: 6px 10px; border: 1px solid var(--border); text-align: left; font-size: 11px; }
+.journal-body th { background: var(--bg2); color: var(--accent); }
+
+/* Log viewer */
+.log-controls { display: flex; gap: 8px; margin-bottom: 12px; align-items: center; }
+.log-controls select, .log-controls input { padding: 6px 10px; background: var(--bg2); border: 1px solid var(--border); border-radius: 4px; color: var(--fg); font-family: var(--font); font-size: 12px; }
+.log-controls select { min-width: 200px; }
+.log-controls input { flex: 1; }
+.log-view { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 12px; max-height: 60vh; overflow-y: auto; font-size: 11px; line-height: 1.5; white-space: pre-wrap; word-break: break-all; }
+
+/* Docs */
+.doc-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 8px; margin-bottom: 16px; }
+.doc-item { padding: 10px 12px; background: var(--bg2); border: 1px solid var(--border); border-radius: 6px; cursor: pointer; transition: border-color 0.15s; }
+.doc-item:hover { border-color: var(--accent2); }
+.doc-item .doc-name { font-size: 11px; font-weight: 600; color: var(--fg); }
+.doc-item .doc-size { font-size: 10px; color: var(--fg3); }
+.doc-content { background: var(--bg3); border: 1px solid var(--border); border-radius: 6px; padding: 16px 20px; line-height: 1.7; }
+.doc-content h1, .doc-content h2, .doc-content h3 { color: var(--accent); margin: 16px 0 8px; }
+.doc-content h1 { font-size: 18px; } .doc-content h2 { font-size: 15px; } .doc-content h3 { font-size: 13px; }
+.doc-content pre { background: var(--bg); padding: 10px; border-radius: 4px; overflow-x: auto; }
+.doc-content code { font-size: 11px; }
+.doc-content table { border-collapse: collapse; width: 100%; }
+.doc-content th, .doc-content td { border: 1px solid var(--border); padding: 6px 10px; font-size: 11px; }
+.doc-content th { background: var(--bg2); color: var(--accent); }
+
+/* Git log */
+.commit { display: flex; gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 12px; }
+.commit .sha { color: var(--accent2); font-weight: 600; min-width: 60px; }
+.commit .date { color: var(--fg3); min-width: 80px; }
+.commit .msg { color: var(--fg); }
+
+/* Search */
+.search { padding: 8px 12px; background: var(--bg2); border: 1px solid var(--border); border-radius: 6px; color: var(--fg); font-family: var(--font); font-size: 12px; width: 100%; margin-bottom: 16px; }
+.search:focus { outline: none; border-color: var(--accent); }
+
+/* Chart container */
+.chart-wrap { position: relative; height: 160px; }
+
+/* Page visibility */
+.page { display: none; }
+.page.active { display: block; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--fg3); }
+</style>
+</head>
+<body>
+<div class="shell">
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="sidebar-hdr">
+      <h1>MLOPS HUB</h1>
+      <div class="sub">RNA 3D Research Lab</div>
+    </div>
+    <div class="nav">
+      <div class="nav-item active" data-page="dashboard" onclick="showPage('dashboard')">
+        <span class="icon">&#9632;</span><span class="label">Dashboard</span>
+      </div>
+      <div class="nav-item" data-page="gpu" onclick="showPage('gpu')">
+        <span class="icon">&#9883;</span><span class="label">GPU & VRAM</span>
+      </div>
+      <div class="nav-item" data-page="services" onclick="showPage('services')">
+        <span class="icon">&#9673;</span><span class="label">Services</span>
+      </div>
+      <div class="nav-item" data-page="timeline" onclick="showPage('timeline')">
+        <span class="icon">&#9202;</span><span class="label">Event Timeline</span>
+      </div>
+      <div class="nav-item" data-page="journal" onclick="showPage('journal')">
+        <span class="icon">&#9998;</span><span class="label">Dev Journal</span>
+      </div>
+      <div class="nav-item" data-page="logs" onclick="showPage('logs')">
+        <span class="icon">&#9776;</span><span class="label">Log Browser</span>
+      </div>
+      <div class="nav-item" data-page="git" onclick="showPage('git')">
+        <span class="icon">&#8962;</span><span class="label">Git History</span>
+      </div>
+      <div class="nav-item" data-page="docs" onclick="showPage('docs')">
+        <span class="icon">&#128220;</span><span class="label">Docs</span>
+      </div>
+      <div class="nav-item" data-page="runbook" onclick="showPage('runbook')">
+        <span class="icon">&#9888;</span><span class="label">Reboot Runbook</span>
+      </div>
+    </div>
+    <div class="sidebar-footer">
+      <div id="clock"></div>
+      <div>Instance C.32817406</div>
+    </div>
+  </div>
+
+  <!-- Main -->
+  <div class="main">
+    <div class="topbar">
+      <h2 id="page-title">Dashboard</h2>
+      <div class="actions">
+        <button class="btn" onclick="refreshAll()">Refresh</button>
+      </div>
+    </div>
+    <div class="content">
+
+      <!-- ═══ Dashboard ═══ -->
+      <div id="page-dashboard" class="page active">
+        <div class="grid-4" id="dash-metrics"></div>
+        <div class="grid-2">
+          <div class="card">
+            <h3>VRAM Usage</h3>
+            <div class="chart-wrap"><canvas id="chart-vram"></canvas></div>
+          </div>
+          <div class="card">
+            <h3>GPU Utilization</h3>
+            <div class="chart-wrap"><canvas id="chart-util"></canvas></div>
+          </div>
+        </div>
+        <div class="card">
+          <h3>Service Status</h3>
+          <div class="svc-grid" id="dash-services"></div>
+        </div>
+        <div class="card">
+          <h3>Recent Events</h3>
+          <div id="dash-events"></div>
+        </div>
+      </div>
+
+      <!-- ═══ GPU ═══ -->
+      <div id="page-gpu" class="page">
+        <div class="grid-4" id="gpu-metrics"></div>
+        <div class="grid-2">
+          <div class="card">
+            <h3>VRAM History</h3>
+            <div class="chart-wrap"><canvas id="chart-vram-full"></canvas></div>
+          </div>
+          <div class="card">
+            <h3>Temperature & Utilization</h3>
+            <div class="chart-wrap"><canvas id="chart-temp"></canvas></div>
+          </div>
+        </div>
+        <div class="card">
+          <h3>GPU Processes</h3>
+          <div id="gpu-procs"></div>
+        </div>
+        <div class="card">
+          <h3>Xid Errors (dmesg)</h3>
+          <div id="gpu-xid" class="log-view" style="max-height:200px;"></div>
+        </div>
+      </div>
+
+      <!-- ═══ Services ═══ -->
+      <div id="page-services" class="page">
+        <div class="svc-grid" id="svc-full"></div>
+        <div class="card" style="margin-top:16px;">
+          <h3>Port Mapping (Vast.ai)</h3>
+          <table style="width:100%;border-collapse:collapse;">
+            <tr><th style="padding:6px 10px;border:1px solid var(--border);background:var(--bg2);color:var(--accent);text-align:left;font-size:11px;">Internal</th><th style="padding:6px 10px;border:1px solid var(--border);background:var(--bg2);color:var(--accent);text-align:left;font-size:11px;">External</th><th style="padding:6px 10px;border:1px solid var(--border);background:var(--bg2);color:var(--accent);text-align:left;font-size:11px;">Service</th></tr>
+            <tr><td style="padding:6px 10px;border:1px solid var(--border);font-size:11px;">1111</td><td style="padding:6px 10px;border:1px solid var(--border);font-size:11px;">19121</td><td style="padding:6px 10px;border:1px solid var(--border);font-size:11px;">Vast Portal</td></tr>
+            <tr><td style="padding:6px 10px;border:1px solid var(--border);font-size:11px;">6006</td><td style="padding:6px 10px;border:1px solid var(--border);font-size:11px;">19448</td><td style="padding:6px 10px;border:1px solid var(--border);font-size:11px;">TensorBoard</td></tr>
+            <tr><td style="padding:6px 10px;border:1px solid var(--border);font-size:11px;">8080</td><td style="padding:6px 10px;border:1px solid var(--border);font-size:11px;">19808</td><td style="padding:6px 10px;border:1px solid var(--border);font-size:11px;">Jupyter</td></tr>
+            <tr><td style="padding:6px 10px;border:1px solid var(--border);font-size:11px;">8384</td><td style="padding:6px 10px;border:1px solid var(--border);font-size:11px;">19753</td><td style="padding:6px 10px;border:1px solid var(--border);font-size:11px;">Syncthing</td></tr>
+            <tr><td style="padding:6px 10px;border:1px solid var(--border);font-size:11px;">19842</td><td style="padding:6px 10px;border:1px solid var(--border);font-size:11px;">19842</td><td style="padding:6px 10px;border:1px solid var(--border);font-size:11px;">Portal Dashboard</td></tr>
+          </table>
+        </div>
+      </div>
+
+      <!-- ═══ Timeline ═══ -->
+      <div id="page-timeline" class="page">
+        <input class="search" id="tl-search" placeholder="Filter events... (kind, source, message)" oninput="filterTimeline()">
+        <div id="timeline-list"></div>
+      </div>
+
+      <!-- ═══ Journal ═══ -->
+      <div id="page-journal" class="page">
+        <input class="search" id="journal-search" placeholder="Search journal..." oninput="filterJournal()">
+        <div id="journal-list"></div>
+      </div>
+
+      <!-- ═══ Logs ═══ -->
+      <div id="page-logs" class="page">
+        <div class="log-controls">
+          <select id="log-select" onchange="loadLogFile()"></select>
+          <input id="log-grep" placeholder="grep..." oninput="loadLogFile()">
+          <button class="btn" onclick="loadLogFile()">Refresh</button>
+        </div>
+        <div id="log-content" class="log-view"></div>
+      </div>
+
+      <!-- ═══ Git ═══ -->
+      <div id="page-git" class="page">
+        <div id="git-list"></div>
+      </div>
+
+      <!-- ═══ Docs ═══ -->
+      <div id="page-docs" class="page">
+        <input class="search" id="doc-search" placeholder="Search docs..." oninput="filterDocs()">
+        <div class="doc-list" id="doc-list"></div>
+        <div class="doc-content" id="doc-content" style="display:none;"></div>
+      </div>
+
+      <!-- ═══ Runbook ═══ -->
+      <div id="page-runbook" class="page">
+        <div class="card">
+          <h3>GPU Reboot Runbook</h3>
+          <div class="doc-content" id="runbook-content"></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+// ── State ─────────────────────────────────────────────────────────────────
+let gpuData = {}, servicesData = [], eventsData = [], journalData = [], logsIndex = [], docsIndex = [];
+let vramChart, utilChart, vramFullChart, tempChart;
+
+// ── Navigation ────────────────────────────────────────────────────────────
+function showPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  const el = document.getElementById('page-' + name);
+  if (el) el.classList.add('active');
+  const nav = document.querySelector(`.nav-item[data-page="${name}"]`);
+  if (nav) nav.classList.add('active');
+  const titles = {
+    dashboard: 'Dashboard', gpu: 'GPU & VRAM', services: 'Services',
+    timeline: 'Event Timeline', journal: 'Dev Journal', logs: 'Log Browser',
+    git: 'Git History', docs: 'Documentation', runbook: 'Reboot Runbook'
+  };
+  document.getElementById('page-title').textContent = titles[name] || name;
+}
+
+// ── Fetch helpers ─────────────────────────────────────────────────────────
+async function api(path) {
+  const r = await fetch(path);
+  return r.json();
+}
+
+// ── GPU ───────────────────────────────────────────────────────────────────
+async function loadGpu() {
+  gpuData = await api('/api/gpu');
+  renderGpuMetrics();
+  renderGpuCharts();
+}
+
+function renderGpuMetrics() {
+  const g = gpuData.gpu || {};
+  const metrics = [
+    { label: 'GPU', value: g.name || 'N/A', cls: '' },
+    { label: 'Temp', value: g.temp_c != null ? g.temp_c + '°C' : '--', cls: g.temp_c > 80 ? 'err' : g.temp_c > 70 ? 'warn' : '' },
+    { label: 'Utilization', value: g.util_pct != null ? g.util_pct + '%' : '--', cls: '' },
+    { label: 'VRAM Used', value: g.vram_used_mb != null ? Math.round(g.vram_used_mb) + ' MB' : '--', cls: '' },
+    { label: 'VRAM Free', value: g.vram_free_mb != null ? Math.round(g.vram_free_mb) + ' MB' : '--', cls: g.vram_free_mb != null && g.vram_free_mb < 2048 ? 'warn' : '' },
+    { label: 'VRAM Total', value: g.vram_total_mb != null ? Math.round(g.vram_total_mb) + ' MB' : '--', cls: '' },
+    { label: 'Power', value: g.power_w != null ? g.power_w + ' W' : '--', cls: '' },
+    { label: 'Status', value: g.healthy ? 'HEALTHY' : 'FAULT', cls: g.healthy ? '' : 'err' },
+  ];
+  ['dash-metrics', 'gpu-metrics'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = metrics.map(m =>
+      `<div class="card metric ${m.cls}"><div class="value">${m.value}</div><div class="label">${m.label}</div></div>`
+    ).join('');
+  });
+
+  // processes
+  const procs = gpuData.processes || [];
+  const procsEl = document.getElementById('gpu-procs');
+  if (procsEl) {
+    if (procs.length === 0) {
+      procsEl.innerHTML = '<div style="color:var(--fg3);font-size:12px;">No GPU processes running</div>';
+    } else {
+      procsEl.innerHTML = '<table style="width:100%;border-collapse:collapse;">' +
+        '<tr><th style="padding:6px 10px;border:1px solid var(--border);background:var(--bg2);color:var(--accent);text-align:left;font-size:11px;">PID</th><th style="padding:6px 10px;border:1px solid var(--border);background:var(--bg2);color:var(--accent);text-align:left;font-size:11px;">Process</th><th style="padding:6px 10px;border:1px solid var(--border);background:var(--bg2);color:var(--accent);text-align:left;font-size:11px;">VRAM (MB)</th></tr>' +
+        procs.map(p => `<tr><td style="padding:6px 10px;border:1px solid var(--border);font-size:11px;">${p.pid}</td><td style="padding:6px 10px;border:1px solid var(--border);font-size:11px;">${p.name}</td><td style="padding:6px 10px;border:1px solid var(--border);font-size:11px;">${p.vram_mb}</td></tr>`).join('') +
+        '</table>';
+    }
+  }
+
+  // xid
+  const xidEl = document.getElementById('gpu-xid');
+  if (xidEl) {
+    const xids = gpuData.xid_errors || [];
+    xidEl.textContent = xids.length ? xids.join('\n') : 'No Xid errors detected';
+  }
+}
+
+function renderGpuCharts() {
+  const hist = gpuData.vram_history || [];
+  const labels = hist.map(h => h.t ? h.t.slice(11, 19) : '');
+  const usedData = hist.map(h => h.used);
+  const utilData = hist.map(h => h.util);
+  const tempData = hist.map(h => h.temp);
+
+  const chartOpts = {
+    responsive: true, maintainAspectRatio: false,
+    scales: { x: { display: false }, y: { grid: { color: '#1a2a3a' }, ticks: { color: '#556677', font: { size: 10 } } } },
+    plugins: { legend: { display: false } },
+    elements: { point: { radius: 0 }, line: { tension: 0.3, borderWidth: 2 } },
+    animation: { duration: 300 },
+  };
+
+  // Dashboard charts
+  updateLineChart('chart-vram', 'vramChart', labels, usedData, '#00ff88', 'VRAM (MB)', chartOpts);
+  updateLineChart('chart-util', 'utilChart', labels, utilData, '#00ccff', 'Util %', chartOpts);
+
+  // GPU page charts
+  updateLineChart('chart-vram-full', 'vramFullChart', labels, usedData, '#00ff88', 'VRAM (MB)', chartOpts);
+
+  // temp + util dual axis
+  const tempCanvas = document.getElementById('chart-temp');
+  if (tempCanvas) {
+    if (window.tempChartInstance) window.tempChartInstance.destroy();
+    window.tempChartInstance = new Chart(tempCanvas, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [
+          { label: 'Temp °C', data: tempData, borderColor: '#ff4466', fill: false, tension: 0.3, borderWidth: 2, pointRadius: 0 },
+          { label: 'Util %', data: utilData, borderColor: '#00ccff', fill: false, tension: 0.3, borderWidth: 2, pointRadius: 0 },
+        ]
+      },
+      options: { ...chartOpts, plugins: { legend: { display: true, labels: { color: '#8899aa', font: { size: 10 } } } } }
+    });
+  }
+}
+
+function updateLineChart(canvasId, globalName, labels, data, color, label, opts) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+  if (window[globalName]) window[globalName].destroy();
+  window[globalName] = new Chart(canvas, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{ label, data, borderColor: color, backgroundColor: color + '22', fill: true, tension: 0.3, borderWidth: 2, pointRadius: 0 }]
+    },
+    options: opts,
+  });
+}
+
+// ── Services ──────────────────────────────────────────────────────────────
+async function loadServices() {
+  servicesData = await api('/api/services');
+  renderServices();
+}
+
+function renderServices() {
+  const html = servicesData.map(s => {
+    const extStr = s.ext ? ` → :${s.ext}` : '';
+    return `<div class="svc">
+      <div class="dot ${s.up ? 'up' : 'down'}"></div>
+      <div class="info">
+        <div class="name">${s.name}</div>
+        <div class="port">:${s.port}${extStr} [${s.status}]</div>
+      </div>
+    </div>`;
+  }).join('');
+  ['dash-services', 'svc-full'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = html;
+  });
+}
+
+// ── Timeline ──────────────────────────────────────────────────────────────
+async function loadEvents() {
+  eventsData = await api('/api/events');
+  renderTimeline();
+}
+
+function renderTimeline(filter = '') {
+  let data = eventsData;
+  if (filter) {
+    const q = filter.toLowerCase();
+    data = data.filter(e =>
+      (e.kind || e.event || '').toLowerCase().includes(q) ||
+      (e.source || e._source || '').toLowerCase().includes(q) ||
+      (e.message || e.msg || '').toLowerCase().includes(q)
+    );
+  }
+
+  const el = document.getElementById('timeline-list');
+  const dashEl = document.getElementById('dash-events');
+
+  const renderEvents = (events) => events.map(e => {
+    const sev = e.severity || 'info';
+    return `<div class="tl-event">
+      <div class="tl-ts">${e.ts || e.timestamp || '?'}</div>
+      <div class="tl-kind"><span class="${sev}">${e.kind || e.event || '?'}</span></div>
+      <div class="tl-msg">${e.message || e.msg || ''}</div>
+      <div class="tl-src">${e.source || e._source || ''}</div>
+    </div>`;
+  }).join('');
+
+  if (el) el.innerHTML = renderEvents(data.slice(0, 200));
+  if (dashEl) dashEl.innerHTML = renderEvents(data.slice(0, 8));
+}
+
+function filterTimeline() {
+  renderTimeline(document.getElementById('tl-search').value);
+}
+
+// ── Journal ───────────────────────────────────────────────────────────────
+async function loadJournal() {
+  const d = await api('/api/journal');
+  journalData = d.sections || [];
+  renderJournal();
+}
+
+function renderJournal(filter = '') {
+  let sections = journalData;
+  if (filter) {
+    const q = filter.toLowerCase();
+    sections = sections.filter(s => (s.title + s.body).toLowerCase().includes(q));
+  }
+
+  const el = document.getElementById('journal-list');
+  el.innerHTML = [...sections].reverse().map((s, i) => {
+    const bodyHtml = typeof marked !== 'undefined' ? marked.parse(s.body) : s.body.replace(/\n/g, '<br>');
+    return `<div class="journal-section">
+      <div class="journal-hdr" onclick="toggleJournal(this)">
+        <span class="title">${s.title}</span>
+        <span class="arrow">&#9654;</span>
+      </div>
+      <div class="journal-body">${bodyHtml}</div>
+    </div>`;
+  }).join('');
+}
+
+function toggleJournal(el) {
+  el.classList.toggle('open');
+  el.nextElementSibling.classList.toggle('open');
+}
+
+function filterJournal() {
+  renderJournal(document.getElementById('journal-search').value);
+}
+
+// ── Logs ──────────────────────────────────────────────────────────────────
+async function loadLogs() {
+  logsIndex = await api('/api/logs');
+  const sel = document.getElementById('log-select');
+  sel.innerHTML = logsIndex.map(l =>
+    `<option value="${l.name}">${l.name} (${l.size_kb} KB)</option>`
+  ).join('');
+  if (logsIndex.length) loadLogFile();
+}
+
+async function loadLogFile() {
+  const name = document.getElementById('log-select').value;
+  const grep = document.getElementById('log-grep').value;
+  if (!name) return;
+  const params = new URLSearchParams({ tail: 200 });
+  if (grep) params.set('grep', grep);
+  const d = await api(`/api/logs/${name}?${params}`);
+  document.getElementById('log-content').textContent = (d.lines || []).join('\n');
+}
+
+// ── Git ───────────────────────────────────────────────────────────────────
+async function loadGit() {
+  const commits = await api('/api/git-log?n=50');
+  document.getElementById('git-list').innerHTML = commits.map(c =>
+    `<div class="commit"><span class="sha">${c.sha}</span><span class="date">${c.date}</span><span class="msg">${c.msg}</span></div>`
+  ).join('');
+}
+
+// ── Docs ──────────────────────────────────────────────────────────────────
+async function loadDocs() {
+  docsIndex = await api('/api/docs');
+  renderDocsList();
+}
+
+function renderDocsList(filter = '') {
+  let docs = docsIndex;
+  if (filter) {
+    const q = filter.toLowerCase();
+    docs = docs.filter(d => d.name.toLowerCase().includes(q));
+  }
+  document.getElementById('doc-list').innerHTML = docs.map(d =>
+    `<div class="doc-item" onclick="openDoc('${d.name}')">
+      <div class="doc-name">${d.name}</div>
+      <div class="doc-size">${d.size_kb} KB</div>
+    </div>`
+  ).join('');
+}
+
+async function openDoc(name) {
+  const d = await api(`/api/docs/${name}`);
+  const el = document.getElementById('doc-content');
+  el.style.display = 'block';
+  el.innerHTML = typeof marked !== 'undefined' ? marked.parse(d.content || '') : d.content;
+}
+
+function filterDocs() {
+  renderDocsList(document.getElementById('doc-search').value);
+  document.getElementById('doc-content').style.display = 'none';
+}
+
+// ── Runbook ───────────────────────────────────────────────────────────────
+function loadRunbook() {
+  const md = `
+### When GPU enters ERR state
+
+\`\`\`bash
+# 1. From external machine (Contabo / Mac):
+vastai stop instance 32817406
+sleep 60
+vastai start instance 32817406
+
+# 2. SSH back in:
+ssh -p 19636 root@175.155.64.231
+cd /workspace/backstage-server-lab
+bash scripts/boot_all.sh
+
+# 3. Verify:
+nvidia-smi
+python3 -c "import torch; print(torch.cuda.is_available())"
+\`\`\`
+
+### What Does NOT Work
+
+| Attempt | Result |
+|---------|--------|
+| \`nvidia-smi -r\` | "GPU reset not supported" |
+| Kill CUDA processes | GPU stays in ERR |
+| \`rmmod nvidia\` | Permission denied (container) |
+| Wait it out | Xid faults don't self-heal |
+
+### Prevention
+
+- GPU watchdog cron: check \`nvidia-smi\` every 2 min
+- Keep VRAM headroom > 2 GB
+- Monitor \`dmesg | grep xid\`
+- Pre-stage restart script on Contabo
+- Checkpoint every 10 epochs
+- Don't run > 2 training jobs concurrently
+`;
+  document.getElementById('runbook-content').innerHTML = typeof marked !== 'undefined' ? marked.parse(md) : md;
+}
+
+// ── Clock ─────────────────────────────────────────────────────────────────
+function updateClock() {
+  document.getElementById('clock').textContent = new Date().toISOString().slice(0, 19).replace('T', ' ') + ' UTC';
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────
+async function refreshAll() {
+  await Promise.all([loadGpu(), loadServices(), loadEvents()]);
+}
+
+async function init() {
+  updateClock();
+  setInterval(updateClock, 1000);
+
+  await Promise.all([
+    loadGpu(), loadServices(), loadEvents(),
+    loadJournal(), loadLogs(), loadGit(), loadDocs(),
+  ]);
+  loadRunbook();
+
+  // auto-refresh GPU every 5s
+  setInterval(loadGpu, 5000);
+  // auto-refresh services every 30s
+  setInterval(loadServices, 30000);
+}
+
+init();
+</script>
+</body>
+</html>
