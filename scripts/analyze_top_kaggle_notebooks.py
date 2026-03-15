@@ -34,8 +34,6 @@ KEYWORDS = {
 }
 
 IMPORT_RE = re.compile(r"^\s*(?:from\s+([\w\.]+)\s+import|import\s+([\w\.]+))", re.M)
-<<<<<<< HEAD
-=======
 READ_DATA_RE = re.compile(
     r"""(?:read_csv|read_parquet|read_json|read_feather|np\.load|loadtxt)\s*\(\s*["']([^"']+)["']""",
     re.I,
@@ -44,21 +42,12 @@ WRITE_DATA_RE = re.compile(
     r"""(?:to_csv|to_parquet|to_json|savez|savez_compressed|to_feather)\s*\(\s*["']([^"']+)["']""",
     re.I,
 )
->>>>>>> origin/main
 
 
 @dataclass
 class NotebookDigest:
     ref: str
     title: str
-<<<<<<< HEAD
-    pulled: bool
-    local_path: str
-    imports: list[str]
-    techniques: list[str]
-    key_params: dict[str, Any]
-    summary: str
-=======
     code_url: str
     pulled: bool
     local_path: str
@@ -72,7 +61,6 @@ class NotebookDigest:
     key_params: dict[str, Any]
     summary: str
     what_it_does: str
->>>>>>> origin/main
     repro_cmd: str
 
 
@@ -98,22 +86,6 @@ def try_pull(ref: str, out_dir: Path) -> tuple[bool, Path | None, str]:
     return False, None, "kaggle_cli_missing"
 
 
-<<<<<<< HEAD
-def analyze_notebook(nb_path: Path) -> tuple[list[str], list[str], dict[str, Any], str]:
-    raw = json.loads(nb_path.read_text(encoding="utf-8"))
-    cells = raw.get("cells", []) if isinstance(raw, dict) else []
-    src_parts: list[str] = []
-    for c in cells:
-        if not isinstance(c, dict):
-            continue
-        if c.get("cell_type") != "code":
-            continue
-        src = c.get("source", [])
-        if isinstance(src, list):
-            src_parts.append("".join(src))
-        elif isinstance(src, str):
-            src_parts.append(src)
-=======
 def _stage_hints(text: str, imports: list[str], techniques: list[str]) -> list[str]:
     hints: list[str] = []
     if "pandas" in imports or "polars" in imports:
@@ -160,7 +132,6 @@ def analyze_notebook(nb_path: Path) -> tuple[int, int, list[str], list[str], lis
             src_parts.append(text_src)
         elif c.get("cell_type") == "markdown":
             markdown_cells += 1
->>>>>>> origin/main
     text = "\n\n".join(src_parts)
 
     imports: list[str] = []
@@ -171,12 +142,9 @@ def analyze_notebook(nb_path: Path) -> tuple[int, int, list[str], list[str], lis
     imports = sorted(set(imports))[:50]
 
     techniques = [k for k, pat in KEYWORDS.items() if re.search(pat, text, flags=re.I)]
-<<<<<<< HEAD
-=======
     datasets_read = sorted(set(READ_DATA_RE.findall(text)))[:20]
     artifacts_written = sorted(set(WRITE_DATA_RE.findall(text)))[:20]
     stage_hints = _stage_hints(text=text, imports=imports, techniques=techniques)
->>>>>>> origin/main
 
     key_params: dict[str, Any] = {}
     for name in ["n_cycle", "recycle", "batch_size", "lr", "dropout", "model_name", "use_msa", "use_template"]:
@@ -185,12 +153,6 @@ def analyze_notebook(nb_path: Path) -> tuple[int, int, list[str], list[str], lis
             key_params[name] = m.group(1).strip()[:120]
 
     summary = (
-<<<<<<< HEAD
-        f"Parsed {len(cells)} cells; detected imports={len(imports)}, "
-        f"techniques={','.join(techniques) if techniques else 'none_detected'}"
-    )
-    return imports, techniques, key_params, summary
-=======
         f"Parsed {len(cells)} cells (code={code_cells}, markdown={markdown_cells}); "
         f"imports={len(imports)}; techniques={','.join(techniques) if techniques else 'none_detected'}; "
         f"datasets={len(datasets_read)}; outputs={len(artifacts_written)}"
@@ -213,21 +175,12 @@ def analyze_notebook(nb_path: Path) -> tuple[int, int, list[str], list[str], lis
         summary,
         what,
     )
->>>>>>> origin/main
 
 
 def fallback_summary(ref: str, title: str) -> NotebookDigest:
     return NotebookDigest(
         ref=ref,
         title=title,
-<<<<<<< HEAD
-        pulled=False,
-        local_path="",
-        imports=[],
-        techniques=["manual_review_required"],
-        key_params={},
-        summary="Notebook pull failed (auth/network/availability). Kept reproducible stub.",
-=======
         code_url=f"https://www.kaggle.com/code/{ref}",
         pulled=False,
         local_path="",
@@ -241,7 +194,6 @@ def fallback_summary(ref: str, title: str) -> NotebookDigest:
         key_params={},
         summary="Notebook pull failed (auth/network/availability). Kept reproducible stub.",
         what_it_does="Notebook source unavailable in this run; use reproduce command to pull code and rerun analysis.",
->>>>>>> origin/main
         repro_cmd=f"kaggle kernels pull {ref} -p tmp/kaggle_top_notebooks --metadata",
     )
 
@@ -265,9 +217,6 @@ def main() -> None:
         if not ok or nb_path is None:
             digests.append(fallback_summary(ref, title))
             continue
-<<<<<<< HEAD
-        imports, techniques, key_params, summary = analyze_notebook(nb_path)
-=======
         (
             code_cells,
             markdown_cells,
@@ -280,19 +229,10 @@ def main() -> None:
             summary,
             what_it_does,
         ) = analyze_notebook(nb_path)
->>>>>>> origin/main
         digests.append(
             NotebookDigest(
                 ref=ref,
                 title=title,
-<<<<<<< HEAD
-                pulled=True,
-                local_path=str(nb_path.relative_to(ROOT)),
-                imports=imports,
-                techniques=techniques,
-                key_params=key_params,
-                summary=summary,
-=======
                 code_url=f"https://www.kaggle.com/code/{ref}",
                 pulled=True,
                 local_path=str(nb_path.relative_to(ROOT)),
@@ -306,7 +246,6 @@ def main() -> None:
                 key_params=key_params,
                 summary=summary,
                 what_it_does=what_it_does,
->>>>>>> origin/main
                 repro_cmd=f"kaggle kernels pull {ref} -p tmp/kaggle_top_notebooks --metadata",
             )
         )
@@ -331,12 +270,9 @@ def main() -> None:
                 ],
                 "detected_techniques": d.techniques,
                 "detected_params": d.key_params,
-<<<<<<< HEAD
-=======
                 "stage_hints": d.stage_hints,
                 "datasets_read": d.datasets_read,
                 "artifacts_written": d.artifacts_written,
->>>>>>> origin/main
             }
             for d in digests
         ],
@@ -359,11 +295,6 @@ def main() -> None:
                 f"- ref: `{d.ref}`",
                 f"- pulled: `{d.pulled}`",
                 f"- local_path: `{d.local_path}`" if d.local_path else "- local_path: `(not available)`",
-<<<<<<< HEAD
-                f"- techniques: `{', '.join(d.techniques)}`",
-                f"- key_params: `{json.dumps(d.key_params)}`",
-                f"- summary: {d.summary}",
-=======
                 f"- code_url: `{d.code_url}`",
                 f"- cells: code={d.code_cells}, markdown={d.markdown_cells}",
                 f"- techniques: `{', '.join(d.techniques)}`",
@@ -373,7 +304,6 @@ def main() -> None:
                 f"- key_params: `{json.dumps(d.key_params)}`",
                 f"- summary: {d.summary}",
                 f"- what_it_does: {d.what_it_does}",
->>>>>>> origin/main
                 f"- reproduce: `{d.repro_cmd}`",
                 "",
             ]

@@ -266,8 +266,6 @@ make kaggle-parallel-status
 make kaggle-parallel-reruns MIN_VOI=0.05 LIMIT=10
 ```
 
-<<<<<<< HEAD
-=======
 Technique-matrix baselines (technique recombination + parameter perturbations + validation loop):
 
 ```bash
@@ -291,7 +289,6 @@ Outputs:
 - `reports/rna_technique_matrix_validation.json`
 - `docs/RNA_TECHNIQUE_MATRIX_VALIDATION.md`
 
->>>>>>> origin/main
 Interactive/common harness for external repos + paramsets:
 
 ```bash
@@ -366,8 +363,6 @@ make rna-ingest INPUT=/path/result.csv RUN_ID=exp42 SEQUENCE=AUGCUA MODEL=my-mod
 - Repo commands assume `.venv` created via `uv venv` and hydrated with `uv pip`.
 - Exporter container also uses `uv run` to avoid mixed package managers.
 
-<<<<<<< HEAD
-=======
 ## CI Instrumentation
 
 Generate safe (presence-only) CI token/secret and Vast CLI instrumentation reports:
@@ -380,7 +375,6 @@ make ci-vast-instrument
 Automated workflow:
 - `.github/workflows/ci-instrumentation.yml`
 
->>>>>>> origin/main
 ## Layout
 
 - `src/labops/` experiment + ingestion + CLI
