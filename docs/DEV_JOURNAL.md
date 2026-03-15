@@ -78,9 +78,101 @@ Built the entire RNA 3D ML research lab from the existing backstage-server-lab r
 | Docs | 34 |
 | Notebooks | 11 starter + 23 executed |
 
+---
+
+## 2026-03-15 · GPU Loss & Reboot Postmortem
+
+### What Happened
+
+The RTX 4080 SUPER entered a fatal error state (`ERR!` in nvidia-smi) during a long session. CUDA became unavailable, all GPU workloads halted, and `torch.cuda.is_available()` returned `False`. The instance itself stayed running (SSH accessible, CPU services alive) but the GPU was bricked until a full instance stop/start cycle.
+
+### Why We Lost GPU Access
+
+1. **GPU entered Xid error state.** Likely triggered by sustained high-VRAM usage across 12 training runs, 7 web services, and concurrent notebook execution. Vast.ai consumer-tier GPUs don't have ECC memory — a single uncorrectable error can cascade into a driver-level lockout.
+2. **No watchdog or memory pressure relief.** We had health checks for web services but nothing monitoring `nvidia-smi` for error states or VRAM pressure. By the time the error surfaced, the GPU was unrecoverable without a cold restart.
+3. **Thermal/power throttling is invisible.** Vast.ai doesn't expose power limit or thermal data through their API. The GPU may have been throttling for a while before the hard fault.
+
+### Why We Lost Access Entirely
+
+4. **Instance API key can't restart itself.** The Vast.ai CLI running *on* the instance can't stop/start its own instance — that requires an account-level API key on an external machine (Mac or Contabo).
+5. **No out-of-band restart path was pre-configured.** We had to manually SSH from another machine, run `vastai stop instance 32817406`, wait for shutdown, then `vastai start instance 32817406`.
+
+### How We Rebooted
+
+```bash
+# From external machine (not the GPU instance itself):
+vastai stop instance 32817406
+# waited ~60s for state transition
+vastai start instance 32817406
+# waited for instance to come back online
+ssh -p 19636 root@175.155.64.231
+cd /workspace/backstage-server-lab
+bash scripts/boot_all.sh
+nvidia-smi  # confirm GPU healthy
+```
+
+The `/workspace` volume survived intact — no data loss. `boot_all.sh` brought all 7 services back up.
+
+### How Prior Recovery Attempts Failed
+
+- **`nvidia-smi -r` (driver reset):** "GPU reset not supported" on this card/driver combo.
+- **Killing CUDA processes:** All `fuser /dev/nvidia*` kills completed, but the GPU stayed in ERR state. The error is at the driver level, not process level.
+- **`rmmod nvidia && modprobe nvidia`:** Permission denied on Vast.ai containers — no kernel module access.
+- **Waiting it out:** GPU error state does not self-heal. Unlike throttling, an Xid fault requires a cold power cycle.
+
+### How to Anticipate & Prevent This
+
+1. **GPU watchdog cron (add to `boot_all.sh`):**
+   ```bash
+   # every 2 min, check nvidia-smi exit code
+   */2 * * * * nvidia-smi > /dev/null 2>&1 || \
+     echo "GPU FAULT $(date)" >> /workspace/logs/gpu_watchdog.log
+   ```
+   This at least alerts early. Can't auto-restart from inside, but can trigger a webhook to Contabo.
+
+2. **VRAM headroom policy:** Keep at least 2GB free. Before launching a new training run, check:
+   ```bash
+   free_mb=$(nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits)
+   [ "$free_mb" -lt 2048 ] && echo "WARN: low VRAM, defer new jobs"
+   ```
+
+3. **Pre-stage restart from Contabo:**
+   ```bash
+   # on Contabo, add a script: ~/restart-vast-gpu.sh
+   #!/bin/bash
+   vastai stop instance 32817406 && sleep 60 && vastai start instance 32817406
+   ```
+   Then from the GPU box (while it's still alive), you can trigger:
+   ```bash
+   ssh contabo 'bash ~/restart-vast-gpu.sh'
+   ```
+
+4. **Stagger GPU workloads.** Don't run 12 training experiments + live services simultaneously. Use a job queue or at minimum serialize training runs.
+
+5. **Checkpoint aggressively.** Every 10 epochs, save to `/workspace/backstage-server-lab/artifacts/checkpoints/`. Our best model survived because we did this — but earlier runs didn't checkpoint and were lost.
+
+6. **Monitor `dmesg` for Xid errors:**
+   ```bash
+   dmesg | grep -i xid  # early warning before full fault
+   ```
+
+### Key Takeaways
+
+| Lesson | Action |
+|--------|--------|
+| GPU error ≠ process crash — can't fix from userspace | Always have an external restart path ready |
+| /workspace volume is durable across stop/start | Don't panic about data, focus on getting GPU back |
+| `boot_all.sh` is the critical recovery script | Keep it working, keep it committed |
+| Consumer GPUs fault under sustained pressure | Build in VRAM guards and thermal awareness |
+| Self-hosted restart is impossible on Vast.ai | Pre-stage `vastai` CLI + API key on Contabo |
+
+---
+
 ### Next Session Priorities
 
-- [ ] Restart instance to fix GPU error state
+- [x] Restart instance to fix GPU error state
+- [ ] Add GPU watchdog cron to `boot_all.sh`
+- [ ] Pre-stage restart script on Contabo
 - [ ] Run improvement experiments on each baseline family
 - [ ] Add MSA features to EGNN for better TM-score
 - [ ] Wire real PDB data into training
