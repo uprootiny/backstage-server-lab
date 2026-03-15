@@ -1,0 +1,19 @@
+{"ts":"2026-03-14T04:19:00Z","kind":"infra.info","source":"vast.instance.32817406","message":"instance healthy; jupyter/tunnels active","severity":"info","run_id":""}
+{"ts":"2026-03-14T04:20:00Z","kind":"execution.run_start","source":"run_fabric","message":"parallel profile three launched with 6 jobs","severity":"info","run_id":"kaggle-parallel-20260314T042000Z"}
+{"ts":"2026-03-14T04:22:39Z","kind":"evaluation.metric","source":"nb-002","message":"tm_score=0.749 lddt=0.665","severity":"info","run_id":"kaggle-parallel-20260314T042000Z"}
+{"ts":"2026-03-14T04:25:42Z","kind":"infra.anomaly","source":"nb-004","message":"kalign/hmmer missing for Protenix prep; switched to rerun queue","severity":"warning","run_id":"kaggle-parallel-20260314T042000Z"}
+{"ts":"2026-03-14T04:25:50Z","kind":"prioritization.voi","source":"voi.compass","message":"recycling_depth and n_layers remain top axes (0.91,0.84)","severity":"info","run_id":""}
+{"ts":"2026-03-14T04:26:12Z","kind":"registry.update","source":"submission_ledger","message":"run_2026_03_14_008 marked active","severity":"info","run_id":"run_2026_03_14_008"}
+{"ts": "2026-03-14T04:35:04Z", "kind": "source.pull", "source": "protenix", "message": "pulled repo=https://github.com/bytedance/Protenix.git notebooks=0 artifacts=17", "severity": "info", "run_id": ""}
+{"ts": "2026-03-14T04:35:05Z", "kind": "source.pull", "source": "rna-fm", "message": "pulled repo=https://github.com/ml4bio/RNA-FM.git notebooks=3 artifacts=1", "severity": "info", "run_id": ""}
+{"ts": "2026-03-14T04:35:08Z", "kind": "source.pull", "source": "rhofold", "message": "pulled repo=https://github.com/ml4bio/RhoFold.git notebooks=0 artifacts=1", "severity": "info", "run_id": ""}
+{"ts": "2026-03-14T04:36:16Z", "kind": "source.pull", "source": "protenix", "message": "pulled repo=https://github.com/bytedance/Protenix.git notebooks=0 artifacts=17", "severity": "info", "run_id": ""}
+{"ts": "2026-03-14T04:36:17Z", "kind": "source.pull", "source": "rna-fm", "message": "pulled repo=https://github.com/ml4bio/RNA-FM.git notebooks=3 artifacts=1", "severity": "info", "run_id": ""}
+{"ts": "2026-03-14T04:36:18Z", "kind": "source.pull", "source": "rhofold", "message": "pulled repo=https://github.com/ml4bio/RhoFold.git notebooks=0 artifacts=1", "severity": "info", "run_id": ""}
+{"ts": "2026-03-14T14:16:21Z", "kind": "dataset.munch", "source": "open_datasets_tab", "message": "ok=False name=Rfam", "severity": "info", "run_id": ""}
+{"ts": "2026-03-14T14:41:11Z", "kind": "run.intent", "source": "run_fabric_ui", "message": "queued intent notebook=notebooks/starters/02_rna_3d_training_filled.ipynb profile=smoke workers=3", "severity": "info", "run_id": "intent"}
+{"ts": "2026-03-14T14:42:20Z", "kind": "source.pull_failed", "source": "protenix", "message": "failed repo pull: https://github.com/bytedance/Protenix.git", "severity": "warning", "run_id": ""}
+{"ts": "2026-03-14T14:42:20Z", "kind": "source.pull_failed", "source": "rna-fm", "message": "failed repo pull: https://github.com/ml4bio/RNA-FM.git", "severity": "warning", "run_id": ""}
+{"ts": "2026-03-14T14:42:20Z", "kind": "source.pull_failed", "source": "rhofold", "message": "failed repo pull: https://github.com/ml4bio/RhoFold.git", "severity": "warning", "run_id": ""}
+{"ts": "2026-03-14T14:42:20Z", "kind": "clickthrough.exec", "source": "clickthrough_tab", "message": "ok=True rc=0", "severity": "info", "run_id": ""}
+{"ts": "2026-03-14T15:38:10Z", "kind": "pipeline.profile", "source": "pipeline_tab", "message": "profiled artifacts/kaggle_parallel/sigmaborov_submission.csv format=kaggle_rna_coordinates", "severity": "info", "run_id": ""}

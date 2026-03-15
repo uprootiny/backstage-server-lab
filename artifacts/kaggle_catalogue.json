@@ -1,0 +1,21 @@
+{
+  "generated_at": "2026-03-14T04:26:30Z",
+  "search": "rna",
+  "limit": 120,
+  "summary": {
+    "competitions": 4,
+    "datasets": 4,
+    "models": 6,
+    "notebooks": 8
+  },
+  "items": [
+    {"kind":"competition","ref":"stanford-rna-3d-folding-part-2","title":"Stanford RNA 3D Folding Part 2","domain":"rna_3d_folding","data_shape":"seq -> MSA -> coords","representation":"sequence, pairwise tensor, 3D coords","target":"nucleotide 3D geometry","validation_dropout":"temporal + motif holdout","url":"https://www.kaggle.com/competitions/stanford-rna-3d-folding-part-2"},
+    {"kind":"competition","ref":"stanford-ribonanza-rna-folding","title":"Stanford Ribonanza RNA Folding","domain":"rna_folding","data_shape":"seq -> reactivity/structure","representation":"sequence + reactivity labels","target":"folding behavior","validation_dropout":"family holdout","url":"https://www.kaggle.com/competitions/stanford-ribonanza-rna-folding"},
+    {"kind":"model","ref":"protenix-v1","title":"Protenix v1 adjusted","domain":"rna_3d_folding","data_shape":"seq + template + msa -> coords","representation":"evoformer + diffusion coordinates","target":"3D fold candidates","validation_dropout":"challenge external holdout","url":"https://github.com/bytedance/Protenix"},
+    {"kind":"model","ref":"ribonanzanet2","title":"RibonanzaNet2","domain":"rna","data_shape":"seq -> pairwise logits","representation":"pairformer blocks + confidence head","target":"structure priors","validation_dropout":"challenge external holdout","url":"https://www.kaggle.com/models"},
+    {"kind":"notebook","ref":"llkh0a/protenix-v17-tbm-denovo","title":"Protenix v17 TBM+DeNovo","domain":"rna_3d_folding","data_shape":"seq -> coords wide csv","representation":"TBM priority + Protenix + de-novo fallback","target":"submission coordinates","validation_dropout":"public/private LB split","url":"https://www.kaggle.com/code/llkh0a/stanford-rna-3d-folding-part-2-protenix-tbm"},
+    {"kind":"notebook","ref":"iafoss/rna-starter","title":"RNA starter baseline","domain":"rna_folding","data_shape":"seq -> baseline coords","representation":"starter features + geometry head","target":"baseline fold","validation_dropout":"local replay split","url":"https://www.kaggle.com/code/iafoss/rna-starter"},
+    {"kind":"notebook","ref":"hoyso48/ribonanza-2nd-solution","title":"Ribonanza 2nd place summary","domain":"rna_folding","data_shape":"seq -> ensemble score","representation":"ensemble weighting + calibration","target":"ranked predictions","validation_dropout":"family + LB replay","url":"https://www.kaggle.com/code"},
+    {"kind":"dataset","ref":"stanford-rna-3d-folding-2","title":"Stanford RNA 3D Folding Part 2 Dataset","domain":"rna_3d_folding","data_shape":"sequence rows + coordinate labels","representation":"csv + pdb-like targets","target":"train/validation/test assets","validation_dropout":"temporal holdout","url":"https://www.kaggle.com/competitions/stanford-rna-3d-folding-part-2/data"}
+  ]
+}

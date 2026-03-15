@@ -1,0 +1,26 @@
+{
+  "updated_at": "2026-03-14T14:15:43Z",
+  "plants": [
+    {
+      "entity": "RNA 3D Part 2",
+      "kind": "competition",
+      "prominence": 1938,
+      "pulse": 1,
+      "contract": "seq->MSA->3D"
+    },
+    {
+      "entity": "RibonanzaNet2",
+      "kind": "model",
+      "prominence": 760,
+      "pulse": 0,
+      "contract": "seq->reactivity->structure"
+    },
+    {
+      "entity": "Stanford RNA 3D data",
+      "kind": "dataset",
+      "prominence": 610,
+      "pulse": 0,
+      "contract": "sequence+coords"
+    }
+  ]
+}

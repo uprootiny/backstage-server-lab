@@ -1,0 +1,248 @@
+{
+  "timestamp": "2026-03-14T23:47:28Z",
+  "challenges": {
+    "rna_3d_folding_v2": [
+      {
+        "strategy": "random_sphere",
+        "tm_score_mean": 0.005724999898506291,
+        "tm_score_std": 0.004332741170604266,
+        "tm_score_median": 0.004305936834142558,
+        "lddt_mean": 0.018485198192749613,
+        "lddt_std": 0.016905123337847168,
+        "n_above_05": 0
+      },
+      {
+        "strategy": "grammar_refined",
+        "tm_score_mean": 0.10598980749868502,
+        "tm_score_std": 0.09189043278730416,
+        "tm_score_median": 0.0759801801259849,
+        "lddt_mean": 0.8282374181359035,
+        "lddt_std": 0.11232625245498226,
+        "n_above_05": 0
+      },
+      {
+        "strategy": "noisy_oracle_1A",
+        "tm_score_mean": 0.47633603656143564,
+        "tm_score_std": 0.22199024966000053,
+        "tm_score_median": 0.5219092466183379,
+        "lddt_mean": 0.6560293419348852,
+        "lddt_std": 0.043758061731002836,
+        "n_above_05": 17
+      }
+    ],
+    "ribonanza": [
+      {
+        "strategy": "random_uniform",
+        "mae_dms": 0.5393017452955245,
+        "mae_2a3": 0.4463117688894272,
+        "mae_overall": 0.4928067570924759
+      },
+      {
+        "strategy": "nussinov_binary",
+        "mae_dms": 0.4634198808670044,
+        "mae_2a3": 0.35678069591522216,
+        "mae_overall": 0.4101002883911133
+      },
+      {
+        "strategy": "noisy_oracle",
+        "mae_dms": 0.11322262808680535,
+        "mae_2a3": 0.08699454620480537,
+        "mae_overall": 0.10010858714580535
+      }
+    ],
+    "openvaccine": [
+      {
+        "strategy": "random_uniform",
+        "mcrmse": 0.6071041464805603,
+        "mcrmse_std": 0.012879280214606818
+      },
+      {
+        "strategy": "structure_aware",
+        "mcrmse": 0.5861639102300008,
+        "mcrmse_std": 0.0172564510489931
+      },
+      {
+        "strategy": "noisy_oracle",
+        "mcrmse": 0.19240299314260484,
+        "mcrmse_std": 0.005474861249066912
+      }
+    ],
+    "rna_3d_folding_v1": [
+      {
+        "strategy": "random_sphere",
+        "tm_score_mean": 0.00376010309066861,
+        "tm_score_std": 0.003561772333049723,
+        "tm_score_median": 0.002472209597810842,
+        "lddt_mean": 0.01886931236465234,
+        "lddt_std": 0.014246683127898452,
+        "n_above_05": 0
+      },
+      {
+        "strategy": "grammar_refined",
+        "tm_score_mean": 0.0817805607811983,
+        "tm_score_std": 0.08102278637981707,
+        "tm_score_median": 0.04821788063583392,
+        "lddt_mean": 0.8828493086550953,
+        "lddt_std": 0.09768707201456958,
+        "n_above_05": 0
+      },
+      {
+        "strategy": "noisy_oracle_1A",
+        "tm_score_mean": 0.39771497095825686,
+        "tm_score_std": 0.2470267709111774,
+        "tm_score_median": 0.29746889655265285,
+        "lddt_mean": 0.6531844292928004,
+        "lddt_std": 0.044142529960675136,
+        "n_above_05": 9
+      }
+    ],
+    "cafa_rna": [
+      {
+        "competition": "cafa_rna_function",
+        "strategy": "random",
+        "fmax_mean": 0.4786013577925342,
+        "fmax_std": 0.1774803311078412,
+        "n": 40
+      },
+      {
+        "competition": "cafa_rna_function",
+        "strategy": "gc_heuristic",
+        "fmax_mean": 0.459146784587961,
+        "fmax_std": 0.16365217083613842,
+        "n": 40
+      },
+      {
+        "competition": "cafa_rna_function",
+        "strategy": "length_heuristic",
+        "fmax_mean": 0.44512667071490597,
+        "fmax_std": 0.1711064709797494,
+        "n": 40
+      },
+      {
+        "competition": "cafa_rna_function",
+        "strategy": "noisy_oracle",
+        "fmax_mean": 0.9783333333333333,
+        "fmax_std": 0.07801353158978967,
+        "n": 40
+      }
+    ],
+    "rna_stability": [
+      {
+        "competition": "rna_stability",
+        "strategy": "random",
+        "spearman_rho": 0.2507082833133253,
+        "n": 50
+      },
+      {
+        "competition": "rna_stability",
+        "strategy": "gc_linear",
+        "spearman_rho": 0.38642912069143565,
+        "n": 50
+      },
+      {
+        "competition": "rna_stability",
+        "strategy": "nussinov_pairs",
+        "spearman_rho": -0.13441221682805124,
+        "n": 50
+      },
+      {
+        "competition": "rna_stability",
+        "strategy": "noisy_oracle",
+        "spearman_rho": 0.9109723889555822,
+        "n": 50
+      }
+    ],
+    "gene_expression": [
+      {
+        "competition": "gene_expression",
+        "strategy": "random",
+        "mse": 0.8719139464531807,
+        "rmse": 0.9337633246455874,
+        "n": 40
+      },
+      {
+        "competition": "gene_expression",
+        "strategy": "mean_fill",
+        "mse": 0.28192914325482554,
+        "rmse": 0.5309700022174751,
+        "n": 40
+      },
+      {
+        "competition": "gene_expression",
+        "strategy": "utr_au_content",
+        "mse": 0.2584548913381454,
+        "rmse": 0.508384589988864,
+        "n": 40
+      },
+      {
+        "competition": "gene_expression",
+        "strategy": "noisy_oracle",
+        "mse": 0.08087382783910071,
+        "rmse": 0.2843832411361484,
+        "n": 40
+      }
+    ],
+    "secondary_structure": [
+      {
+        "competition": "rna_secondary_structure",
+        "strategy": "no_pairs",
+        "f1_mean": 0.0,
+        "f1_std": 0.0,
+        "n": 30
+      },
+      {
+        "competition": "rna_secondary_structure",
+        "strategy": "random_pairs",
+        "f1_mean": 0.029919862745949703,
+        "f1_std": 0.05450285647927818,
+        "n": 30
+      },
+      {
+        "competition": "rna_secondary_structure",
+        "strategy": "greedy_nearest",
+        "f1_mean": 0.05447940974604106,
+        "f1_std": 0.059472639352675334,
+        "n": 30
+      },
+      {
+        "competition": "rna_secondary_structure",
+        "strategy": "nussinov",
+        "f1_mean": 1.0,
+        "f1_std": 0.0,
+        "n": 30
+      },
+      {
+        "competition": "rna_secondary_structure",
+        "strategy": "nussinov_no_wobble",
+        "f1_mean": 0.7900711056550328,
+        "f1_std": 0.2323585012002346,
+        "n": 30
+      },
+      {
+        "competition": "rna_secondary_structure",
+        "strategy": "noisy_oracle",
+        "f1_mean": 0.9022133660791914,
+        "f1_std": 0.041289494580093115,
+        "n": 30
+      }
+    ]
+  },
+  "datasets": {
+    "pdb_rna": {
+      "n": 80,
+      "len_range": "13-111"
+    },
+    "rfam_families": {
+      "n": 60,
+      "families": 10
+    },
+    "shape_probing": {
+      "n": 50,
+      "experiments": [
+        "DMS-MaPseq",
+        "SHAPE-MaP",
+        "icSHAPE"
+      ]
+    }
+  }
+}

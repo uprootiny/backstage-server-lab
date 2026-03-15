@@ -1,0 +1,50 @@
+generated_at: '2026-03-14T04:49:08Z'
+recipes:
+- id: llkh0a_stanford-rna-3d-folding-part-2-protenix-tbm
+  notebook_ref: llkh0a/stanford-rna-3d-folding-part-2-protenix-tbm
+  repro_steps:
+  - kaggle kernels pull llkh0a/stanford-rna-3d-folding-part-2-protenix-tbm -p tmp/kaggle_top_notebooks
+    --metadata
+  - PYTHONPATH=src .venv/bin/python -m labops.cli kaggle-parallel-dispatch --plan
+    artifacts/kaggle_parallel/plan.json --workers 3
+  detected_techniques:
+  - manual_review_required
+  detected_params: {}
+- id: iafoss_rna-starter
+  notebook_ref: iafoss/rna-starter
+  repro_steps:
+  - kaggle kernels pull iafoss/rna-starter -p tmp/kaggle_top_notebooks --metadata
+  - PYTHONPATH=src .venv/bin/python -m labops.cli kaggle-parallel-dispatch --plan
+    artifacts/kaggle_parallel/plan.json --workers 3
+  detected_techniques:
+  - manual_review_required
+  detected_params: {}
+- id: hoyso48_stanford-ribonanza-2nd-place-solution
+  notebook_ref: hoyso48/stanford-ribonanza-2nd-place-solution
+  repro_steps:
+  - kaggle kernels pull hoyso48/stanford-ribonanza-2nd-place-solution -p tmp/kaggle_top_notebooks
+    --metadata
+  - PYTHONPATH=src .venv/bin/python -m labops.cli kaggle-parallel-dispatch --plan
+    artifacts/kaggle_parallel/plan.json --workers 3
+  detected_techniques:
+  - manual_review_required
+  detected_params: {}
+- id: gosuxd_openchemfold-rna3d
+  notebook_ref: gosuxd/openchemfold-rna3d
+  repro_steps:
+  - kaggle kernels pull gosuxd/openchemfold-rna3d -p tmp/kaggle_top_notebooks --metadata
+  - PYTHONPATH=src .venv/bin/python -m labops.cli kaggle-parallel-dispatch --plan
+    artifacts/kaggle_parallel/plan.json --workers 3
+  detected_techniques:
+  - manual_review_required
+  detected_params: {}
+- id: shujunhe_ribonanzanet2-training-notes
+  notebook_ref: shujunhe/ribonanzanet2-training-notes
+  repro_steps:
+  - kaggle kernels pull shujunhe/ribonanzanet2-training-notes -p tmp/kaggle_top_notebooks
+    --metadata
+  - PYTHONPATH=src .venv/bin/python -m labops.cli kaggle-parallel-dispatch --plan
+    artifacts/kaggle_parallel/plan.json --workers 3
+  detected_techniques:
+  - manual_review_required
+  detected_params: {}

@@ -1,0 +1,110 @@
+[
+  {
+    "competition": "stanford-rna-3d-folding",
+    "strategy": "grammar_egnn",
+    "n_sequences": 50,
+    "timestamp": "2026-03-14T23:25:45Z",
+    "tm_score_mean": 0.07496445773009354,
+    "tm_score_std": 0.08330282853711449,
+    "tm_score_median": 0.04316494580932461,
+    "lddt_mean": 0.7104438087968513,
+    "lddt_std": 0.0870597642846317,
+    "n_above_05": 0
+  },
+  {
+    "competition": "stanford-rna-3d-folding",
+    "strategy": "helix_only",
+    "n_sequences": 50,
+    "timestamp": "2026-03-14T23:25:45Z",
+    "tm_score_mean": 0.013938869177138042,
+    "tm_score_std": 0.011730213390360835,
+    "tm_score_median": 0.009908738288278315,
+    "lddt_mean": 0.7750911134982789,
+    "lddt_std": 0.1227202789284202,
+    "n_above_05": 0
+  },
+  {
+    "competition": "stanford-rna-3d-folding",
+    "strategy": "random_walk",
+    "n_sequences": 50,
+    "timestamp": "2026-03-14T23:25:45Z",
+    "tm_score_mean": 0.013294575506679252,
+    "tm_score_std": 0.009250082137474282,
+    "tm_score_median": 0.0117372540341836,
+    "lddt_mean": 0.29820304164150113,
+    "lddt_std": 0.046346250344675675,
+    "n_above_05": 0
+  },
+  {
+    "competition": "stanford-rna-3d-folding",
+    "strategy": "noisy_oracle",
+    "n_sequences": 50,
+    "timestamp": "2026-03-14T23:25:45Z",
+    "tm_score_mean": 0.2360503417094795,
+    "tm_score_std": 0.16375496645761792,
+    "tm_score_median": 0.2065715485248591,
+    "lddt_mean": 0.45255822941067203,
+    "lddt_std": 0.04764302628774892,
+    "n_above_05": 4
+  },
+  {
+    "competition": "stanford-ribonanza",
+    "strategy": "mean_fill",
+    "n_sequences": 100,
+    "timestamp": "2026-03-14T23:25:45Z",
+    "mae_dms": 0.4254979407787323,
+    "mae_2a3": 0.33202940344810483,
+    "mae_overall": 0.3787636721134186
+  },
+  {
+    "competition": "stanford-ribonanza",
+    "strategy": "gc_heuristic",
+    "n_sequences": 100,
+    "timestamp": "2026-03-14T23:25:45Z",
+    "mae_dms": 0.4440100881457329,
+    "mae_2a3": 0.3473412176966667,
+    "mae_overall": 0.39567565292119977
+  },
+  {
+    "competition": "stanford-ribonanza",
+    "strategy": "noisy_oracle",
+    "n_sequences": 100,
+    "timestamp": "2026-03-14T23:25:45Z",
+    "mae_dms": 0.11929339028894902,
+    "mae_2a3": 0.09491844847798347,
+    "mae_overall": 0.10710591938346624
+  },
+  {
+    "competition": "stanford-ribonanza",
+    "strategy": "random",
+    "n_sequences": 100,
+    "timestamp": "2026-03-14T23:25:45Z",
+    "mae_dms": 0.5386616894602776,
+    "mae_2a3": 0.4424332332611084,
+    "mae_overall": 0.490547461360693
+  },
+  {
+    "competition": "openvaccine-mrna",
+    "strategy": "mean_fill",
+    "n_sequences": 50,
+    "timestamp": "2026-03-14T23:25:45Z",
+    "mcrmse": 0.4981857442855835,
+    "mcrmse_std": 0.01362941246017224
+  },
+  {
+    "competition": "openvaccine-mrna",
+    "strategy": "noisy_oracle",
+    "n_sequences": 50,
+    "timestamp": "2026-03-14T23:25:45Z",
+    "mcrmse": 0.19923353672027588,
+    "mcrmse_std": 0.006505145558651052
+  },
+  {
+    "competition": "openvaccine-mrna",
+    "strategy": "random",
+    "n_sequences": 50,
+    "timestamp": "2026-03-14T23:25:45Z",
+    "mcrmse": 0.6100954818725586,
+    "mcrmse_std": 0.01623379534636255
+  }
+]

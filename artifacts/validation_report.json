@@ -1,0 +1,113 @@
+{
+  "stages": [
+    {
+      "name": "1. Sequence Generation",
+      "status": "passed",
+      "duration_ms": 103.32854487933218,
+      "n_items": 80,
+      "errors": [],
+      "metrics": {
+        "len_mean": "38.9",
+        "len_range": "[9, 110]",
+        "configs_used": 18
+      }
+    },
+    {
+      "name": "2. Nussinov Folding",
+      "status": "passed",
+      "duration_ms": 0.002600019797682762,
+      "n_items": 0,
+      "errors": [],
+      "metrics": {
+        "fold_errors": 0,
+        "pairing_frac_mean": "n/a"
+      }
+    },
+    {
+      "name": "3. 3D Geometry (Frenet-Serret)",
+      "status": "passed",
+      "duration_ms": 0.002250075340270996,
+      "n_items": 0,
+      "errors": [],
+      "metrics": {
+        "coord_dim": "3",
+        "total_atoms": 0
+      }
+    },
+    {
+      "name": "4. TDA Fingerprinting",
+      "status": "passed",
+      "duration_ms": 0.0017399434000253677,
+      "n_items": 0,
+      "errors": [],
+      "metrics": {
+        "tda_feature_dim": 0
+      }
+    },
+    {
+      "name": "5. Graph Construction",
+      "status": "passed",
+      "duration_ms": 0.7181258406490088,
+      "n_items": 0,
+      "errors": [],
+      "metrics": {
+        "mean_nodes": "nan",
+        "mean_edges": "nan"
+      }
+    },
+    {
+      "name": "6. EGNN Forward Pass",
+      "status": "passed",
+      "duration_ms": 74.65341803617775,
+      "n_items": 0,
+      "errors": [],
+      "metrics": {
+        "mae_pf": "nan",
+        "mae_nd": "nan",
+        "note": "untrained model (random weights)"
+      }
+    },
+    {
+      "name": "7. Dataset Export",
+      "status": "passed",
+      "duration_ms": 0.001050066202878952,
+      "n_items": 0,
+      "errors": [],
+      "metrics": {
+        "skipped": "no records"
+      }
+    },
+    {
+      "name": "8. Kaggle Scoring",
+      "status": "passed",
+      "duration_ms": 3418.439676053822,
+      "n_items": 3,
+      "errors": [],
+      "metrics": {
+        "competitions_scored": 3
+      }
+    }
+  ],
+  "overall": "PASSED",
+  "total_duration_ms": 3597.350826021284,
+  "kaggle_scores": {
+    "rna3d_grammar_egnn": {
+      "tm_score_mean": 0.08755047776634993,
+      "tm_score_std": 0.08082241680367487,
+      "tm_score_median": 0.05758458632814963,
+      "lddt_mean": 0.7312797627420913,
+      "lddt_std": 0.10395464146509786,
+      "n_above_05": 0
+    },
+    "ribonanza_gc_heuristic": {
+      "mae_dms": 0.44824619591236115,
+      "mae_2a3": 0.3428418502211571,
+      "mae_overall": 0.3955440230667591
+    },
+    "openvaccine_mean_fill": {
+      "mcrmse": 0.4961913987994194,
+      "mcrmse_std": 0.011018660818688087
+    }
+  },
+  "timestamp": "2026-03-14T23:09:49Z"
+}

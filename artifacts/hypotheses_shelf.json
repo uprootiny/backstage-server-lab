@@ -1,0 +1,11 @@
+{
+  "updated_at": "2026-03-14T14:15:43Z",
+  "hypotheses": [
+    {
+      "id": "H1",
+      "statement": "recycling depth >3 improves long-range helix recovery",
+      "evidence": "exp17 +0.03 F1",
+      "status": "active"
+    }
+  ]
+}

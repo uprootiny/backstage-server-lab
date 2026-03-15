@@ -15,6 +15,10 @@ logs/*
 !logs/.gitkeep
 artifacts/*
 !artifacts/.gitkeep
+!artifacts/checkpoints/
+!artifacts/*.json
+!artifacts/*.jsonl
+!artifacts/*.yaml
 data/*
 !data/.gitkeep
 !data/seeds/
